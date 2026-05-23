@@ -2,68 +2,73 @@
 
 @if (Model == null || !Model.Any())
 {
-    <div class="alert alert-info">
+    <div class="alert-dark-info">
         Nenhum Epic encontrado.
     </div>
 }
 else
 {
-    <div class="table-responsive">
-        <table class="table table-striped table-hover">
-            <thead class="table-dark">
-                <tr>
-                    <th>Chave</th>
-                    <th>Resumo</th>
-                    <th>Status</th>
-                    <th>Responsável</th>
-                    <th>Prioridade</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var epic in Model)
-                {
-                    <tr>
-                        <td>
-                            <a href="#" class="text-decoration-none fw-bold">@epic.Key</a>
-                        </td>
-                        <td>@epic.Summary</td>
-                        <td>
-                            <span class="badge @GetStatusBadgeClass(epic.Status)">@epic.Status</span>
-                        </td>
-                        <td>@epic.Assignee</td>
-                        <td>
-                            <span class="badge @GetPriorityBadgeClass(epic.Priority)">@epic.Priority</span>
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    </div>
-    <p class="text-muted small">Total: @Model.Count epics</p>
+    @foreach (var epic in Model)
+    {
+        var percent = GetProgressPercent(epic.Status);
+        var barColor = GetBarColor(percent);
+        var percentClass = percent >= 80 ? "high" : percent >= 40 ? "mid" : "low";
+
+        <div class="delivery-item">
+            <div class="delivery-header">
+                <div class="delivery-name">
+                    <span class="delivery-key">@epic.Key</span>
+                    <span class="delivery-title">@epic.Summary</span>
+                </div>
+                <div class="delivery-sprint">
+                    <span class="status-badge @GetStatusClass(epic.Status)">@epic.Status</span>
+                </div>
+            </div>
+            <div class="progress-bar-track">
+                <div class="progress-bar-fill @barColor" style="width: @(percent)%"></div>
+            </div>
+            <div class="delivery-meta">
+                <span>👤 @epic.Assignee &nbsp; · &nbsp; 🏷️ @epic.IssueType</span>
+                <span class="delivery-percent @percentClass">@(percent)%</span>
+            </div>
+        </div>
+    }
 }
 
 @functions {
-    string GetStatusBadgeClass(string status)
+    int GetProgressPercent(string status)
     {
         return status.ToLower() switch
         {
-            "em progresso" or "in progress" => "bg-primary",
-            "to do" or "a fazer" => "bg-secondary",
-            "em revisão" or "in review" => "bg-info",
-            "done" or "concluído" => "bg-success",
-            _ => "bg-secondary"
+            "done" or "concluído" or "closed" => 100,
+            "in progress" or "em progresso" => 55,
+            "in review" or "em revisão" => 80,
+            "to do" or "a fazer" => 10,
+            _ => 25
         };
     }
 
-    string GetPriorityBadgeClass(string priority)
+    string GetBarColor(int percent)
     {
-        return priority.ToLower() switch
+        return percent switch
         {
-            "crítica" or "critical" or "highest" => "bg-danger",
-            "alta" or "high" => "bg-warning text-dark",
-            "média" or "medium" => "bg-info",
-            "baixa" or "low" => "bg-success",
-            _ => "bg-secondary"
+            >= 90 => "green",
+            >= 60 => "teal",
+            >= 40 => "blue",
+            >= 20 => "yellow",
+            _ => "red"
+        };
+    }
+
+    string GetStatusClass(string status)
+    {
+        return status.ToLower() switch
+        {
+            "in progress" or "em progresso" => "status-progress",
+            "to do" or "a fazer" => "status-todo",
+            "in review" or "em revisão" => "status-review",
+            "done" or "concluído" => "status-done",
+            _ => "status-todo"
         };
     }
 }

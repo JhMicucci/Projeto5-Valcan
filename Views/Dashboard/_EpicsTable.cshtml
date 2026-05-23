@@ -1,0 +1,69 @@
+@model List<Projeto5_Valcan.Models.JiraIssue>
+
+@if (Model == null || !Model.Any())
+{
+    <div class="alert alert-info">
+        Nenhum Epic encontrado.
+    </div>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-striped table-hover">
+            <thead class="table-dark">
+                <tr>
+                    <th>Chave</th>
+                    <th>Resumo</th>
+                    <th>Status</th>
+                    <th>Responsável</th>
+                    <th>Prioridade</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var epic in Model)
+                {
+                    <tr>
+                        <td>
+                            <a href="#" class="text-decoration-none fw-bold">@epic.Key</a>
+                        </td>
+                        <td>@epic.Summary</td>
+                        <td>
+                            <span class="badge @GetStatusBadgeClass(epic.Status)">@epic.Status</span>
+                        </td>
+                        <td>@epic.Assignee</td>
+                        <td>
+                            <span class="badge @GetPriorityBadgeClass(epic.Priority)">@epic.Priority</span>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <p class="text-muted small">Total: @Model.Count epics</p>
+}
+
+@functions {
+    string GetStatusBadgeClass(string status)
+    {
+        return status.ToLower() switch
+        {
+            "em progresso" or "in progress" => "bg-primary",
+            "to do" or "a fazer" => "bg-secondary",
+            "em revisão" or "in review" => "bg-info",
+            "done" or "concluído" => "bg-success",
+            _ => "bg-secondary"
+        };
+    }
+
+    string GetPriorityBadgeClass(string priority)
+    {
+        return priority.ToLower() switch
+        {
+            "crítica" or "critical" or "highest" => "bg-danger",
+            "alta" or "high" => "bg-warning text-dark",
+            "média" or "medium" => "bg-info",
+            "baixa" or "low" => "bg-success",
+            _ => "bg-secondary"
+        };
+    }
+}

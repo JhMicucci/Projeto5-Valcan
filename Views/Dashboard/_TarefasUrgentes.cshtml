@@ -1,0 +1,64 @@
+@model List<Projeto5_Valcan.Models.JiraIssue>
+
+@if (Model == null || !Model.Any())
+{
+    <div class="alert alert-success">
+        ✅ Nenhuma tarefa vencendo nos próximos 5 dias!
+    </div>
+}
+else
+{
+    <div class="accordion" id="accordionUrgentes">
+        @foreach (var tarefa in Model)
+        {
+            var collapseId = $"collapse{tarefa.Key.Replace("-", "")}";
+            var headingId = $"heading{tarefa.Key.Replace("-", "")}";
+            var isVenceHoje = tarefa.DiasRestantes == 0;
+
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="@headingId">
+                    <button class="accordion-button @(isVenceHoje ? "" : "collapsed")" type="button" 
+                            data-bs-toggle="collapse" data-bs-target="#@collapseId" 
+                            aria-expanded="@(isVenceHoje ? "true" : "false")" aria-controls="@collapseId">
+                        <span class="badge @tarefa.BadgeClass me-2">@tarefa.BadgeUrgencia</span>
+                        <strong class="me-2">@tarefa.Key</strong> — @tarefa.Summary
+                    </button>
+                </h2>
+                <div id="@collapseId" class="accordion-collapse collapse @(isVenceHoje ? "show" : "")" 
+                     aria-labelledby="@headingId" data-bs-parent="#accordionUrgentes">
+                    <div class="accordion-body">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <p class="mb-1"><strong>📅 Prazo</strong></p>
+                                <p>@(tarefa.DueDate?.ToString("dd/MM/yyyy") ?? "—")</p>
+                            </div>
+                            <div class="col-md-3">
+                                <p class="mb-1"><strong>⏳ Dias restantes</strong></p>
+                                <p>@tarefa.DiasRestantes dia(s)</p>
+                            </div>
+                            <div class="col-md-3">
+                                <p class="mb-1"><strong>👤 Responsável</strong></p>
+                                <p>@tarefa.Assignee</p>
+                            </div>
+                            <div class="col-md-3">
+                                <p class="mb-1"><strong>🏷️ Tipo</strong></p>
+                                <p>@tarefa.IssueType</p>
+                            </div>
+                        </div>
+                        <hr />
+                        <p>
+                            <strong>Status:</strong> <code>@tarefa.Status</code> &nbsp;&nbsp;
+                            <strong>Prioridade:</strong> <code>@tarefa.Priority</code>
+                        </p>
+                        @if (!string.IsNullOrEmpty(tarefa.Key))
+                        {
+                            <a href="#" class="btn btn-sm btn-outline-primary">
+                                🔗 Abrir no Jira
+                            </a>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}

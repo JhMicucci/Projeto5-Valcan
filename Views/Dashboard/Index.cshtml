@@ -1,0 +1,127 @@
+@model Projeto5_Valcan.Models.DashboardViewModel
+@{
+    ViewData["Title"] = "Dashboard Valcann";
+}
+
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="display-5">📊 Dashboard de Epics — Valcann</h1>
+            <p class="text-muted">Dados consumidos diretamente do Jira via API REST v3</p>
+            @if (Model.UsandoDadosMock)
+            {
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i> <strong>Modo Demonstração:</strong> 
+                    Exibindo dados de exemplo. Configure as credenciais do Jira em <code>appsettings.json</code> para dados reais.
+                </div>
+            }
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+    {
+        <div class="alert alert-danger" role="alert">
+            <strong>Erro:</strong> @Model.ErrorMessage
+        </div>
+    }
+
+    <!-- Métricas Resumidas -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body text-center">
+                    <h3 class="card-title">@Model.TotalEpics</h3>
+                    <p class="card-text">Epics em Andamento</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-danger text-white">
+                <div class="card-body text-center">
+                    <h3 class="card-title">@Model.TotalUrgentes</h3>
+                    <p class="card-text">Tarefas Urgentes</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-dark">
+                <div class="card-body text-center">
+                    <h3 class="card-title">@Model.VencemHojeOuAmanha</h3>
+                    <p class="card-text">Vencem Hoje/Amanhã</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body text-center">
+                    <h3 class="card-title">@Model.VencemEm2a5Dias</h3>
+                    <p class="card-text">Vencem em 2-5 dias</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Seção Epics -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center bg-light">
+                    <h5 class="mb-0">📋 Epics em Andamento</h5>
+                    <button class="btn btn-sm btn-outline-primary" onclick="refreshEpics()">
+                        🔄 Atualizar
+                    </button>
+                </div>
+                <div class="card-body" id="epics-container">
+                    @await Html.PartialAsync("_EpicsTable", Model.Epics)
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Seção Tarefas Urgentes -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center bg-light">
+                    <h5 class="mb-0">⏰ Atividades com Prazo nos Próximos 5 Dias</h5>
+                    <div>
+                        <span class="text-muted me-3">
+                            Hoje: <strong>@DateTime.Today.ToString("dd/MM/yyyy")</strong> — 
+                            até <strong>@DateTime.Today.AddDays(5).ToString("dd/MM/yyyy")</strong>
+                        </span>
+                        <button class="btn btn-sm btn-outline-primary" onclick="refreshUrgentes()">
+                            🔄 Atualizar
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body" id="urgentes-container">
+                    @await Html.PartialAsync("_TarefasUrgentes", Model.TarefasUrgentes)
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function refreshEpics() {
+            $('#epics-container').html('<div class="text-center"><div class="spinner-border" role="status"><span class="visually-hidden">Carregando...</span></div></div>');
+            $.get('@Url.Action("RefreshEpics", "Dashboard")', function(data) {
+                $('#epics-container').html(data);
+            });
+        }
+
+        function refreshUrgentes() {
+            $('#urgentes-container').html('<div class="text-center"><div class="spinner-border" role="status"><span class="visually-hidden">Carregando...</span></div></div>');
+            $.get('@Url.Action("RefreshUrgentes", "Dashboard")', function(data) {
+                $('#urgentes-container').html(data);
+            });
+        }
+
+        // Auto-refresh a cada 5 minutos
+        setInterval(function() {
+            refreshEpics();
+            refreshUrgentes();
+        }, 300000);
+    </script>
+}

@@ -29,7 +29,7 @@ else
             _ => "🔹"
         };
 
-        <div class="risk-item">
+        <a href="@Url.Action("Issue", "Dashboard", new { key = tarefa.Key, project = ViewContext.HttpContext.Request.Query["project"].ToString() })" class="risk-item" style="text-decoration:none; cursor:pointer;">
             <div style="display:flex; align-items:flex-start; flex:1;">
                 <span class="risk-icon @riskClass">@riskIcon</span>
                 <div class="risk-info">
@@ -46,6 +46,6 @@ else
                 </div>
             </div>
             <span class="risk-level risk-@riskClass">@riskLabel</span>
-        </div>
+        </a>
     }
 }

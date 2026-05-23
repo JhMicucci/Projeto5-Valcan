@@ -11,6 +11,16 @@ namespace Projeto5_Valcan.Services
         Task<List<JiraProject>> BuscarProjetosAsync();
         Task<List<JiraIssue>> BuscarEpicsAsync(string projectKey);
         Task<List<JiraIssue>> BuscarTarefasUrgentesAsync(string projectKey);
+        Task<JiraIssueDetail?> BuscarDetalhesIssueAsync(string issueKey);
+        Task AdicionarComentarioAsync(string issueKey, string body);
+        Task AtualizarStatusAsync(string issueKey, string transitionName);
+        Task<List<JiraTransition>> BuscarTransicoesAsync(string issueKey);
+    }
+
+    public class JiraTransition
+    {
+        public string Id { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
     }
 
     public class JiraService : IJiraService
@@ -141,6 +151,239 @@ namespace Projeto5_Valcan.Services
             {
                 _logger.LogError(ex, "Erro ao buscar dados do Jira");
                 throw;
+            }
+        }
+
+        public async Task<JiraIssueDetail?> BuscarDetalhesIssueAsync(string issueKey)
+        {
+            try
+            {
+                var url = $"{_settings.BaseUrl}/rest/api/3/issue/{issueKey}?fields=summary,description,status,assignee,priority,issuetype,parent,reporter,labels,duedate,created,updated,subtasks,comment,sprint,story_points,customfield_10016,customfield_10020";
+                _logger.LogInformation("Buscando detalhes: {Url}", url);
+
+                var response = await _httpClient.GetAsync(url);
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorBody = await response.Content.ReadAsStringAsync();
+                    _logger.LogError("Jira retornou {StatusCode}: {Body}", response.StatusCode, errorBody);
+                    return null;
+                }
+
+                var json = await response.Content.ReadAsStringAsync();
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+                var fields = root.GetProperty("fields");
+
+                var detail = new JiraIssueDetail
+                {
+                    Key = root.GetProperty("key").GetString() ?? "",
+                    Summary = GetString(fields, "summary") ?? "Sem nome",
+                    Status = GetNested(fields, "status", "name") ?? "—",
+                    StatusCategory = GetNested(fields, "status", "statusCategory", "name") ?? "",
+                    Assignee = GetNested(fields, "assignee", "displayName") ?? "Unassigned",
+                    Priority = GetNested(fields, "priority", "name") ?? "—",
+                    IssueType = GetNested(fields, "issuetype", "name") ?? "—",
+                    Reporter = GetNested(fields, "reporter", "displayName"),
+                    ParentKey = GetNested(fields, "parent", "key"),
+                    ParentSummary = GetNested(fields, "parent", "fields", "summary"),
+                    DueDate = GetDate(fields, "duedate"),
+                    Created = GetDate(fields, "created"),
+                    Updated = GetDate(fields, "updated"),
+                    ProjectKey = issueKey.Split('-')[0]
+                };
+
+                // Description (ADF format - extract text)
+                if (fields.TryGetProperty("description", out var desc) && desc.ValueKind == JsonValueKind.Object)
+                {
+                    detail.Description = ExtractAdfText(desc);
+                }
+
+                // Labels
+                if (fields.TryGetProperty("labels", out var labels) && labels.ValueKind == JsonValueKind.Array)
+                {
+                    var labelList = new List<string>();
+                    foreach (var l in labels.EnumerateArray())
+                        labelList.Add(l.GetString() ?? "");
+                    detail.Labels = labelList.Any() ? string.Join(", ", labelList) : "None";
+                }
+                else
+                {
+                    detail.Labels = "None";
+                }
+
+                // Sprint (customfield_10020)
+                if (fields.TryGetProperty("customfield_10020", out var sprints) && sprints.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var s in sprints.EnumerateArray())
+                    {
+                        if (s.TryGetProperty("name", out var sName))
+                        {
+                            detail.Sprint = sName.GetString();
+                            break;
+                        }
+                    }
+                }
+
+                // Story Points (customfield_10016)
+                if (fields.TryGetProperty("customfield_10016", out var sp) && sp.ValueKind == JsonValueKind.Number)
+                {
+                    detail.StoryPoints = sp.GetInt32();
+                }
+
+                // Subtasks
+                if (fields.TryGetProperty("subtasks", out var subtasks) && subtasks.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var st in subtasks.EnumerateArray())
+                    {
+                        detail.Subtasks.Add(new JiraSubtask
+                        {
+                            Key = st.GetProperty("key").GetString() ?? "",
+                            Summary = GetNested(st, "fields", "summary") ?? "",
+                            Status = GetNested(st, "fields", "status", "name") ?? ""
+                        });
+                    }
+                }
+
+                // Comments
+                if (fields.TryGetProperty("comment", out var comment) && comment.TryGetProperty("comments", out var comments))
+                {
+                    foreach (var c in comments.EnumerateArray())
+                    {
+                        var authorName = GetNested(c, "author", "displayName") ?? "Unknown";
+                        var initials = string.Concat(authorName.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(w => w[0]));
+                        var bodyText = "";
+                        if (c.TryGetProperty("body", out var cBody))
+                            bodyText = ExtractAdfText(cBody);
+
+                        detail.Comments.Add(new JiraComment
+                        {
+                            Author = authorName,
+                            AuthorInitials = initials.ToUpper(),
+                            Body = bodyText,
+                            Created = DateTime.TryParse(c.GetProperty("created").GetString(), out var cd) ? cd : DateTime.MinValue
+                        });
+                    }
+                }
+
+                return detail;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erro ao buscar detalhes da issue {Key}", issueKey);
+                throw;
+            }
+        }
+
+        public async Task AdicionarComentarioAsync(string issueKey, string body)
+        {
+            var url = $"{_settings.BaseUrl}/rest/api/3/issue/{issueKey}/comment";
+            var payload = new
+            {
+                body = new
+                {
+                    type = "doc",
+                    version = 1,
+                    content = new[]
+                    {
+                        new
+                        {
+                            type = "paragraph",
+                            content = new[]
+                            {
+                                new { type = "text", text = body }
+                            }
+                        }
+                    }
+                }
+            };
+
+            var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+            var response = await _httpClient.PostAsync(url, content);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                _logger.LogError("Erro ao adicionar comentário: {Error}", error);
+                response.EnsureSuccessStatusCode();
+            }
+        }
+
+        public async Task<List<JiraTransition>> BuscarTransicoesAsync(string issueKey)
+        {
+            var url = $"{_settings.BaseUrl}/rest/api/3/issue/{issueKey}/transitions";
+            var response = await _httpClient.GetAsync(url);
+            response.EnsureSuccessStatusCode();
+
+            var json = await response.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(json);
+            var transitions = new List<JiraTransition>();
+
+            foreach (var t in doc.RootElement.GetProperty("transitions").EnumerateArray())
+            {
+                transitions.Add(new JiraTransition
+                {
+                    Id = t.GetProperty("id").GetString() ?? "",
+                    Name = t.GetProperty("name").GetString() ?? ""
+                });
+            }
+            return transitions;
+        }
+
+        public async Task AtualizarStatusAsync(string issueKey, string transitionId)
+        {
+            var url = $"{_settings.BaseUrl}/rest/api/3/issue/{issueKey}/transitions";
+            var payload = new { transition = new { id = transitionId } };
+            var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+            var response = await _httpClient.PostAsync(url, content);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                _logger.LogError("Erro ao atualizar status: {Error}", error);
+                response.EnsureSuccessStatusCode();
+            }
+        }
+
+        // Helpers
+        private static string? GetString(JsonElement el, string prop)
+        {
+            return el.TryGetProperty(prop, out var v) && v.ValueKind != JsonValueKind.Null ? v.GetString() : null;
+        }
+
+        private static string? GetNested(JsonElement el, params string[] path)
+        {
+            var current = el;
+            foreach (var p in path)
+            {
+                if (!current.TryGetProperty(p, out var next) || next.ValueKind == JsonValueKind.Null)
+                    return null;
+                current = next;
+            }
+            return current.ValueKind == JsonValueKind.String ? current.GetString() : current.ToString();
+        }
+
+        private static DateTime? GetDate(JsonElement el, string prop)
+        {
+            if (el.TryGetProperty(prop, out var v) && v.ValueKind != JsonValueKind.Null)
+                return DateTime.TryParse(v.GetString(), out var d) ? d : null;
+            return null;
+        }
+
+        private static string ExtractAdfText(JsonElement adf)
+        {
+            var sb = new StringBuilder();
+            ExtractText(adf, sb);
+            return sb.ToString().Trim();
+        }
+
+        private static void ExtractText(JsonElement el, StringBuilder sb)
+        {
+            if (el.TryGetProperty("text", out var text))
+                sb.Append(text.GetString());
+            if (el.TryGetProperty("content", out var content) && content.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var child in content.EnumerateArray())
+                    ExtractText(child, sb);
             }
         }
     }

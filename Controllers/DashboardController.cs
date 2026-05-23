@@ -83,5 +83,56 @@ namespace Projeto5_Valcan.Controllers
                 return Content($"<div class='alert-dark-danger'>Erro: {ex.Message}</div>");
             }
         }
+
+        public async Task<IActionResult> Issue(string key, string? project)
+        {
+            try
+            {
+                var detail = await _jiraService.BuscarDetalhesIssueAsync(key);
+                if (detail == null)
+                    return RedirectToAction("Index", new { project });
+
+                ViewBag.Transitions = await _jiraService.BuscarTransicoesAsync(key);
+                ViewBag.Project = project ?? detail.ProjectKey;
+                return View("IssueDetail", detail);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erro ao buscar detalhes da issue {Key}", key);
+                TempData["Error"] = $"Erro ao buscar detalhes: {ex.Message}";
+                return RedirectToAction("Index", new { project });
+            }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> AddComment(string issueKey, string project, string commentBody)
+        {
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(commentBody))
+                    await _jiraService.AdicionarComentarioAsync(issueKey, commentBody);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erro ao adicionar comentário");
+                TempData["Error"] = $"Erro ao adicionar comentário: {ex.Message}";
+            }
+            return RedirectToAction("Issue", new { key = issueKey, project });
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> ChangeStatus(string issueKey, string project, string transitionId)
+        {
+            try
+            {
+                await _jiraService.AtualizarStatusAsync(issueKey, transitionId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erro ao alterar status");
+                TempData["Error"] = $"Erro ao alterar status: {ex.Message}";
+            }
+            return RedirectToAction("Issue", new { key = issueKey, project });
+        }
     }
 }

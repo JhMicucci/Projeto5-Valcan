@@ -1,0 +1,265 @@
+@model Projeto5_Valcan.Models.JiraIssueDetail
+@{
+    ViewData["Title"] = $"{Model.Key} — {Model.Summary}";
+    var transitions = ViewBag.Transitions as List<Projeto5_Valcan.Services.JiraTransition> ?? new();
+    var project = ViewBag.Project as string ?? Model.ProjectKey;
+}
+
+<style>
+    .issue-layout { display: grid; grid-template-columns: 1fr 340px; gap: 24px; }
+    .issue-left { min-width: 0; }
+    .issue-right {}
+
+    .issue-breadcrumb { font-size: 0.75rem; color: var(--text-muted); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+    .issue-breadcrumb a { color: var(--accent-purple); text-decoration: none; }
+    .issue-breadcrumb a:hover { text-decoration: underline; }
+
+    .issue-title { font-size: 1.5rem; font-weight: 700; color: #fff; margin-bottom: 20px; }
+
+    .issue-section { margin-bottom: 24px; }
+    .issue-section-title { font-size: 0.8rem; font-weight: 700; color: #fff; margin-bottom: 8px; }
+
+    .issue-description { color: var(--text-secondary); font-size: 0.85rem; line-height: 1.6;
+        background: rgba(255,255,255,0.03); border-radius: 6px; padding: 14px; border: 1px solid var(--border-color); }
+    .issue-description.empty { color: var(--text-muted); font-style: italic; }
+
+    /* Details panel */
+    .details-panel { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; }
+    .details-panel-header { padding: 14px 18px; border-bottom: 1px solid var(--border-color);
+        display: flex; justify-content: space-between; align-items: center; }
+    .details-panel-header h3 { font-size: 0.85rem; font-weight: 600; color: #fff; margin: 0; }
+    .details-row { display: flex; justify-content: space-between; align-items: center;
+        padding: 10px 18px; border-bottom: 1px solid rgba(30,58,95,0.3); font-size: 0.8rem; }
+    .details-row:last-child { border-bottom: none; }
+    .details-label { color: var(--text-muted); font-weight: 500; }
+    .details-value { color: var(--text-primary); text-align: right; }
+    .details-value.overdue { color: var(--accent-red); font-weight: 600;
+        background: rgba(239,83,80,0.12); padding: 2px 8px; border-radius: 4px; }
+
+    /* Status dropdown */
+    .status-select { background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-color);
+        border-radius: 6px; padding: 5px 10px; font-size: 0.78rem; cursor: pointer; }
+    .status-select:focus { outline: none; border-color: var(--accent-blue); }
+
+    /* Subtasks */
+    .subtask-item { display: flex; align-items: center; gap: 10px; padding: 8px 0;
+        border-bottom: 1px solid rgba(30,58,95,0.3); font-size: 0.82rem; }
+    .subtask-item:last-child { border-bottom: none; }
+    .subtask-check { width: 18px; height: 18px; border-radius: 4px; display: flex;
+        align-items: center; justify-content: center; font-size: 0.7rem; flex-shrink: 0; }
+    .subtask-check.done { background: rgba(102,187,106,0.2); color: var(--accent-green); }
+    .subtask-check.pending { background: rgba(138,148,176,0.15); color: var(--text-muted); }
+    .subtask-key { color: var(--accent-blue); font-size: 0.75rem; }
+
+    /* Comments */
+    .comment-item { display: flex; gap: 12px; padding: 14px 0; border-bottom: 1px solid rgba(30,58,95,0.3); }
+    .comment-item:last-child { border-bottom: none; }
+    .comment-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--accent-blue);
+        display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; color: #fff; flex-shrink: 0; }
+    .comment-body { flex: 1; }
+    .comment-author { font-size: 0.8rem; font-weight: 600; color: var(--text-primary); }
+    .comment-date { font-size: 0.7rem; color: var(--text-muted); margin-left: 8px; }
+    .comment-text { font-size: 0.82rem; color: var(--text-secondary); margin-top: 4px; line-height: 1.5; }
+
+    /* Comment form */
+    .comment-form { display: flex; gap: 10px; align-items: flex-start; margin-top: 14px; }
+    .comment-input { flex: 1; background: var(--bg-secondary); border: 1px solid var(--border-color);
+        border-radius: 6px; padding: 10px 14px; color: var(--text-primary); font-size: 0.82rem; resize: vertical; min-height: 40px; }
+    .comment-input::placeholder { color: var(--text-muted); }
+    .comment-input:focus { outline: none; border-color: var(--accent-blue); }
+    .btn-comment { background: var(--accent-blue); color: #0a1929; border: none; border-radius: 6px;
+        padding: 10px 18px; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
+    .btn-comment:hover { background: var(--accent-cyan); }
+
+    /* Timestamps */
+    .issue-timestamps { font-size: 0.7rem; color: var(--text-muted); padding: 12px 18px; border-top: 1px solid var(--border-color); }
+
+    @@media (max-width: 992px) { .issue-layout { grid-template-columns: 1fr; } }
+</style>
+
+<!-- Breadcrumb -->
+<div class="issue-breadcrumb">
+    <a href="@Url.Action("Index", "Dashboard")">Projects</a> /
+    <a href="@Url.Action("Index", "Dashboard", new { project })">@project</a> /
+    @if (!string.IsNullOrEmpty(Model.ParentKey))
+    {
+        <a href="@Url.Action("Issue", "Dashboard", new { key = Model.ParentKey, project })">@Model.ParentKey</a>
+        <span>/</span>
+    }
+    <span style="color: var(--text-primary);">@Model.Key</span>
+</div>
+
+<div class="issue-layout">
+    <!-- Left Column -->
+    <div class="issue-left">
+        <h1 class="issue-title">@Model.Summary</h1>
+
+        <!-- Status Transition -->
+        <div class="issue-section">
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                <span class="status-badge @GetStatusCssClass(Model.Status)">@Model.Status</span>
+                @if (transitions.Any())
+                {
+                    <form method="post" asp-action="ChangeStatus" style="display:flex; gap:6px; align-items:center;">
+                        <input type="hidden" name="issueKey" value="@Model.Key" />
+                        <input type="hidden" name="project" value="@project" />
+                        <select name="transitionId" class="status-select">
+                            @foreach (var t in transitions)
+                            {
+                                <option value="@t.Id">@t.Name</option>
+                            }
+                        </select>
+                        <button type="submit" class="btn-sync" style="font-size:0.75rem;">Mover →</button>
+                    </form>
+                }
+            </div>
+        </div>
+
+        <!-- Description -->
+        <div class="issue-section">
+            <div class="issue-section-title">Description</div>
+            @if (!string.IsNullOrWhiteSpace(Model.Description))
+            {
+                <div class="issue-description">@Model.Description</div>
+            }
+            else
+            {
+                <div class="issue-description empty">Add a description...</div>
+            }
+        </div>
+
+        <!-- Subtasks -->
+        @if (Model.Subtasks.Any())
+        {
+            <div class="issue-section">
+                <div class="issue-section-title">Subtasks (@Model.Subtasks.Count(s => s.IsDone)/@Model.Subtasks.Count)</div>
+                @foreach (var sub in Model.Subtasks)
+                {
+                    <div class="subtask-item">
+                        <div class="subtask-check @(sub.IsDone ? "done" : "pending")">
+                            @(sub.IsDone ? "✓" : "○")
+                        </div>
+                        <a href="@Url.Action("Issue", "Dashboard", new { key = sub.Key, project })" class="subtask-key">@sub.Key</a>
+                        <span style="color: var(--text-primary);">@sub.Summary</span>
+                        <span class="status-badge @GetStatusCssClass(sub.Status)" style="margin-left:auto; font-size:0.65rem;">@sub.Status</span>
+                    </div>
+                }
+            </div>
+        }
+
+        <!-- Activity / Comments -->
+        <div class="issue-section">
+            <div class="issue-section-title">Activity — Comments (@Model.Comments.Count)</div>
+
+            @foreach (var comment in Model.Comments.OrderByDescending(c => c.Created))
+            {
+                <div class="comment-item">
+                    <div class="comment-avatar">@comment.AuthorInitials</div>
+                    <div class="comment-body">
+                        <span class="comment-author">@comment.Author</span>
+                        <span class="comment-date">@comment.Created.ToString("MMM dd, yyyy h:mm tt")</span>
+                        <div class="comment-text">@comment.Body</div>
+                    </div>
+                </div>
+            }
+
+            <!-- Add Comment Form -->
+            <form method="post" asp-action="AddComment" class="comment-form">
+                <input type="hidden" name="issueKey" value="@Model.Key" />
+                <input type="hidden" name="project" value="@project" />
+                <textarea name="commentBody" class="comment-input" placeholder="Add a comment..." rows="2"></textarea>
+                <button type="submit" class="btn-comment">Send</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Right Column - Details -->
+    <div class="issue-right">
+        <div class="details-panel">
+            <div class="details-panel-header">
+                <h3>Details</h3>
+            </div>
+
+            <div class="details-row">
+                <span class="details-label">Assignee</span>
+                <span class="details-value">@Model.Assignee</span>
+            </div>
+            <div class="details-row">
+                <span class="details-label">Labels</span>
+                <span class="details-value">@(Model.Labels ?? "None")</span>
+            </div>
+            @if (!string.IsNullOrEmpty(Model.ParentKey))
+            {
+                <div class="details-row">
+                    <span class="details-label">Parent</span>
+                    <span class="details-value">
+                        <a href="@Url.Action("Issue", "Dashboard", new { key = Model.ParentKey, project })"
+                           style="color: var(--accent-purple); text-decoration:none;">
+                            @Model.ParentKey @Model.ParentSummary
+                        </a>
+                    </span>
+                </div>
+            }
+            <div class="details-row">
+                <span class="details-label">Due date</span>
+                <span class="details-value @(Model.IsDueDateOverdue ? "overdue" : "")">
+                    @if (Model.DueDate.HasValue)
+                    {
+                        @(Model.IsDueDateOverdue ? "⚠ " : "")@Model.DueDate.Value.ToString("MMM dd, yyyy")
+                    }
+                    else
+                    {
+                        <text>None</text>
+                    }
+                </span>
+            </div>
+            <div class="details-row">
+                <span class="details-label">Team</span>
+                <span class="details-value">@(Model.Team ?? "None")</span>
+            </div>
+            <div class="details-row">
+                <span class="details-label">Start date</span>
+                <span class="details-value">@(Model.StartDate?.ToString("MMM dd, yyyy") ?? "None")</span>
+            </div>
+            <div class="details-row">
+                <span class="details-label">Sprint</span>
+                <span class="details-value" style="color: var(--accent-blue);">@(Model.Sprint ?? "None")</span>
+            </div>
+            <div class="details-row">
+                <span class="details-label">Story point estimate</span>
+                <span class="details-value">@(Model.StoryPoints?.ToString() ?? "None")</span>
+            </div>
+            <div class="details-row">
+                <span class="details-label">Reporter</span>
+                <span class="details-value">@(Model.Reporter ?? "None")</span>
+            </div>
+            <div class="details-row">
+                <span class="details-label">Type</span>
+                <span class="details-value">@Model.IssueType</span>
+            </div>
+            <div class="details-row">
+                <span class="details-label">Priority</span>
+                <span class="details-value">@Model.Priority</span>
+            </div>
+
+            <div class="issue-timestamps">
+                Created @(Model.Created?.ToString("MMMM dd, yyyy 'at' h:mm tt") ?? "—")<br />
+                Updated @(Model.Updated?.ToString("MMMM dd, yyyy 'at' h:mm tt") ?? "—")
+            </div>
+        </div>
+    </div>
+</div>
+
+@functions {
+    string GetStatusCssClass(string status)
+    {
+        return status.ToLower() switch
+        {
+            "in progress" or "em progresso" => "status-progress",
+            "to do" or "a fazer" => "status-todo",
+            "in review" or "em revisão" => "status-review",
+            "done" or "concluído" => "status-done",
+            _ => "status-todo"
+        };
+    }
+}

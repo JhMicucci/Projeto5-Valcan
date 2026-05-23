@@ -14,7 +14,7 @@ else
         var barColor = GetBarColor(percent);
         var percentClass = percent >= 80 ? "high" : percent >= 40 ? "mid" : "low";
 
-        <div class="delivery-item">
+        <a href="@Url.Action("Issue", "Dashboard", new { key = epic.Key, project = ViewContext.HttpContext.Request.Query["project"].ToString() })" class="delivery-item" style="text-decoration:none; display:block; cursor:pointer;">
             <div class="delivery-header">
                 <div class="delivery-name">
                     <span class="delivery-key">@epic.Key</span>
@@ -31,7 +31,7 @@ else
                 <span>👤 @epic.Assignee &nbsp; · &nbsp; 🏷️ @epic.IssueType</span>
                 <span class="delivery-percent @percentClass">@(percent)%</span>
             </div>
-        </div>
+        </a>
     }
 }
 

@@ -1,0 +1,120 @@
+@model Projeto5_Valcan.Models.DashboardViewModel
+@{
+    ViewData["Title"] = $"Dashboard — {Model.ProjetoNome}";
+}
+
+<!-- Header -->
+<div class="dashboard-header">
+    <div>
+        <h1>Mission Control — @Model.ProjetoNome</h1>
+        <div class="subtitle">
+            Projeto: <strong>@Model.ProjetoSelecionado</strong> · Last synced: agora
+        </div>
+    </div>
+    <div class="header-actions">
+        <a href="@Url.Action("Projects", "Dashboard")" class="btn-sync">← Projetos</a>
+        @if (Model.UsandoDadosMock)
+        {
+            <span class="risk-level risk-medium">DEMO</span>
+        }
+        <button class="btn-sync" onclick="refreshEpics(); refreshUrgentes();">
+            🔄 Sync
+        </button>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(Model.ErrorMessage))
+{
+    <div class="alert-dark-danger mb-3">
+        <strong>Erro:</strong> @Model.ErrorMessage
+    </div>
+}
+
+<!-- Metric Cards -->
+<div class="metric-cards">
+    <div class="metric-card">
+        <div class="metric-icon blue">⚡</div>
+        <div>
+            <div class="metric-value">@Model.TotalEpics</div>
+            <div class="metric-label">Active Sprints</div>
+        </div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-icon green">✅</div>
+        <div>
+            <div class="metric-value">@Model.Epics.Count(e => e.Status.ToLower() is "done" or "concluído")</div>
+            <div class="metric-label">Completed</div>
+        </div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-icon yellow">🔄</div>
+        <div>
+            <div class="metric-value">@Model.Epics.Count(e => e.Status.ToLower() is "in progress" or "em progresso")</div>
+            <div class="metric-label">In Progress</div>
+        </div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-icon red">⚠️</div>
+        <div>
+            <div class="metric-value">@Model.TotalUrgentes</div>
+            <div class="metric-label">Blockers</div>
+        </div>
+    </div>
+</div>
+
+<!-- Two-column layout -->
+<div class="row g-3">
+    <!-- Delivery Status -->
+    <div class="col-lg-7">
+        <div class="panel">
+            <div class="panel-header">
+                <h3>Delivery Status</h3>
+                <button class="btn-sync" onclick="refreshEpics()">🔄</button>
+            </div>
+            <div class="panel-body" id="epics-container">
+                @await Html.PartialAsync("_EpicsTable", Model.Epics)
+            </div>
+        </div>
+    </div>
+
+    <!-- Risk Indicators -->
+    <div class="col-lg-5">
+        <div class="panel">
+            <div class="panel-header">
+                <h3>Risk Indicators</h3>
+                <div style="display:flex; gap:8px;">
+                    <span class="risk-level risk-high">@Model.VencemHojeOuAmanha High</span>
+                    <span class="risk-level risk-medium">@Model.VencemEm2a5Dias Medium</span>
+                </div>
+            </div>
+            <div class="panel-body" id="urgentes-container">
+                @await Html.PartialAsync("_TarefasUrgentes", Model.TarefasUrgentes)
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function refreshEpics() {
+            var el = document.getElementById('epics-container');
+            el.innerHTML = '<div style="display:flex;justify-content:center;padding:30px;"><div class="spinner-dark"></div></div>';
+            $.get('@Url.Action("RefreshEpics", "Dashboard", new { project = Model.ProjetoSelecionado })', function(data) {
+                el.innerHTML = data;
+            });
+        }
+
+        function refreshUrgentes() {
+            var el = document.getElementById('urgentes-container');
+            el.innerHTML = '<div style="display:flex;justify-content:center;padding:30px;"><div class="spinner-dark"></div></div>';
+            $.get('@Url.Action("RefreshUrgentes", "Dashboard", new { project = Model.ProjetoSelecionado })', function(data) {
+                el.innerHTML = data;
+            });
+        }
+
+        setInterval(function() {
+            refreshEpics();
+            refreshUrgentes();
+        }, 300000);
+    </script>
+}

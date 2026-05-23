@@ -17,29 +17,75 @@ namespace Projeto5_Valcan.Controllers
             _configuration = configuration;
         }
 
-        public async Task<IActionResult> Index(string? project)
+        public async Task<IActionResult> Index()
         {
-            var viewModel = new DashboardViewModel();
-            var usandoMock = string.IsNullOrEmpty(_configuration["Jira:ApiToken"]);
-            viewModel.UsandoDadosMock = usandoMock;
+            var vm = new GlobalDashboardViewModel();
+            vm.UsandoDadosMock = string.IsNullOrEmpty(_configuration["Jira:ApiToken"]);
 
             try
             {
-                // Buscar lista de projetos
-                viewModel.Projetos = await _jiraService.BuscarProjetosAsync();
+                var projetos = await _jiraService.BuscarProjetosAsync();
 
-                // Se nenhum projeto selecionado, mostrar tela de seleção
-                if (string.IsNullOrEmpty(project))
+                var tasks = projetos.Select(async p =>
                 {
-                    return View("SelectProject", viewModel);
-                }
+                    var summary = new ProjectSummary { Key = p.Key, Name = p.Name };
+                    try
+                    {
+                        var epicsTask = _jiraService.BuscarEpicsAsync(p.Key);
+                        var urgTask = _jiraService.BuscarTarefasUrgentesAsync(p.Key);
+                        await Task.WhenAll(epicsTask, urgTask);
+                        summary.Issues = await epicsTask;
+                        summary.Urgentes = await urgTask;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Erro ao buscar dados do projeto {Key}", p.Key);
+                    }
+                    return summary;
+                });
 
+                vm.ProjectSummaries = (await Task.WhenAll(tasks)).ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erro ao carregar dashboard global");
+                vm.ErrorMessage = $"Erro ao buscar dados: {ex.Message}";
+            }
+
+            return View(vm);
+        }
+
+        public async Task<IActionResult> Projects()
+        {
+            var viewModel = new DashboardViewModel();
+            viewModel.UsandoDadosMock = string.IsNullOrEmpty(_configuration["Jira:ApiToken"]);
+
+            try
+            {
+                viewModel.Projetos = await _jiraService.BuscarProjetosAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erro ao buscar projetos");
+                viewModel.ErrorMessage = $"Erro ao buscar dados: {ex.Message}";
+            }
+
+            return View("SelectProject", viewModel);
+        }
+
+        public async Task<IActionResult> Project(string project)
+        {
+            var viewModel = new DashboardViewModel();
+            viewModel.UsandoDadosMock = string.IsNullOrEmpty(_configuration["Jira:ApiToken"]);
+
+            try
+            {
+                viewModel.Projetos = await _jiraService.BuscarProjetosAsync();
                 viewModel.ProjetoSelecionado = project;
                 viewModel.ProjetoNome = viewModel.Projetos.FirstOrDefault(p => p.Key == project)?.Name ?? project;
 
                 var epicsTask = _jiraService.BuscarEpicsAsync(project);
                 var urgentesTask = _jiraService.BuscarTarefasUrgentesAsync(project);
-
                 await Task.WhenAll(epicsTask, urgentesTask);
 
                 viewModel.Epics = await epicsTask;
@@ -51,7 +97,7 @@ namespace Projeto5_Valcan.Controllers
                 viewModel.ErrorMessage = $"Erro ao buscar dados: {ex.Message}";
             }
 
-            return View(viewModel);
+            return View("ProjectDashboard", viewModel);
         }
 
         [HttpGet]

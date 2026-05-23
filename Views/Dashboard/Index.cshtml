@@ -1,120 +1,179 @@
-@model Projeto5_Valcan.Models.DashboardViewModel
+@model Projeto5_Valcan.Models.GlobalDashboardViewModel
 @{
-    ViewData["Title"] = $"Dashboard — {Model.ProjetoNome}";
+    ViewData["Title"] = "Mission Control";
 }
 
 <!-- Header -->
 <div class="dashboard-header">
     <div>
-        <h1>Mission Control — @Model.ProjetoNome</h1>
-        <div class="subtitle">
-            Projeto: <strong>@Model.ProjetoSelecionado</strong> · Last synced: agora
-        </div>
+        <h1>Mission Control</h1>
+        <div class="subtitle">Overview de todos os projetos · Last synced: agora</div>
     </div>
     <div class="header-actions">
-        <a href="@Url.Action("Index", "Dashboard")" class="btn-sync">← Projetos</a>
         @if (Model.UsandoDadosMock)
         {
             <span class="risk-level risk-medium">DEMO</span>
         }
-        <button class="btn-sync" onclick="refreshEpics(); refreshUrgentes();">
-            🔄 Sync
-        </button>
     </div>
 </div>
 
 @if (!string.IsNullOrEmpty(Model.ErrorMessage))
 {
-    <div class="alert-dark-danger mb-3">
+    <div class="alert-dark-danger" style="margin-bottom:20px;">
         <strong>Erro:</strong> @Model.ErrorMessage
     </div>
 }
 
-<!-- Metric Cards -->
+<!-- Global Metrics -->
 <div class="metric-cards">
     <div class="metric-card">
         <div class="metric-icon blue">⚡</div>
         <div>
-            <div class="metric-value">@Model.TotalEpics</div>
-            <div class="metric-label">Active Sprints</div>
+            <div class="metric-value">@Model.ProjectSummaries.Count</div>
+            <div class="metric-label">Active Projects</div>
         </div>
     </div>
     <div class="metric-card">
         <div class="metric-icon green">✅</div>
         <div>
-            <div class="metric-value">@Model.Epics.Count(e => e.Status.ToLower() is "done" or "concluído")</div>
+            <div class="metric-value">@Model.TotalDone</div>
             <div class="metric-label">Completed</div>
         </div>
     </div>
     <div class="metric-card">
         <div class="metric-icon yellow">🔄</div>
         <div>
-            <div class="metric-value">@Model.Epics.Count(e => e.Status.ToLower() is "in progress" or "em progresso")</div>
+            <div class="metric-value">@Model.TotalInProgress</div>
             <div class="metric-label">In Progress</div>
         </div>
     </div>
     <div class="metric-card">
         <div class="metric-icon red">⚠️</div>
         <div>
-            <div class="metric-value">@Model.TotalUrgentes</div>
+            <div class="metric-value">@Model.TotalBlockers</div>
             <div class="metric-label">Blockers</div>
         </div>
     </div>
 </div>
 
-<!-- Two-column layout -->
+<!-- Project Delivery Overview -->
 <div class="row g-3">
-    <!-- Delivery Status -->
     <div class="col-lg-7">
         <div class="panel">
             <div class="panel-header">
                 <h3>Delivery Status</h3>
-                <button class="btn-sync" onclick="refreshEpics()">🔄</button>
             </div>
-            <div class="panel-body" id="epics-container">
-                @await Html.PartialAsync("_EpicsTable", Model.Epics)
+            <div class="panel-body">
+                @foreach (var proj in Model.ProjectSummaries)
+                {
+                    var barColor = proj.ProgressPercent >= 80 ? "green" : proj.ProgressPercent >= 40 ? "blue" : proj.ProgressPercent >= 20 ? "yellow" : "red";
+                    var percentClass = proj.ProgressPercent >= 80 ? "high" : proj.ProgressPercent >= 40 ? "mid" : "low";
+
+                    <a href="@Url.Action("Project", "Dashboard", new { project = proj.Key })" style="text-decoration:none; display:block;" class="delivery-item">
+                        <div class="delivery-header">
+                            <div class="delivery-name">
+                                <span class="delivery-key">@proj.Key</span>
+                                <span class="delivery-title">@proj.Name</span>
+                            </div>
+                            <div class="delivery-sprint" style="display:flex; gap:6px;">
+                                <span style="font-size:0.7rem; color:var(--text-muted);">@proj.TotalIssues issues</span>
+                            </div>
+                        </div>
+                        <div class="progress-bar-track">
+                            <div class="progress-bar-fill @barColor" style="width: @proj.ProgressPercent%"></div>
+                        </div>
+                        <div class="delivery-meta">
+                            <span>
+                                ✅ @proj.Done done &nbsp;·&nbsp;
+                                🔄 @proj.InProgress in progress &nbsp;·&nbsp;
+                                📋 @proj.ToDo to do
+                            </span>
+                            <span class="delivery-percent @percentClass">@(proj.ProgressPercent)%</span>
+                        </div>
+                    </a>
+                }
+
+                @if (!Model.ProjectSummaries.Any())
+                {
+                    <div class="alert-dark-info">Nenhum projeto encontrado.</div>
+                }
             </div>
         </div>
     </div>
 
-    <!-- Risk Indicators -->
+    <!-- All Risks -->
     <div class="col-lg-5">
         <div class="panel">
             <div class="panel-header">
                 <h3>Risk Indicators</h3>
                 <div style="display:flex; gap:8px;">
-                    <span class="risk-level risk-high">@Model.VencemHojeOuAmanha High</span>
-                    <span class="risk-level risk-medium">@Model.VencemEm2a5Dias Medium</span>
+                    <span class="risk-level risk-high">@Model.TotalBlockers High</span>
                 </div>
             </div>
-            <div class="panel-body" id="urgentes-container">
-                @await Html.PartialAsync("_TarefasUrgentes", Model.TarefasUrgentes)
+            <div class="panel-body">
+                @{
+                    var allUrgent = Model.ProjectSummaries
+                        .SelectMany(p => p.Urgentes.Select(u => new { Project = p.Key, Issue = u }))
+                        .OrderBy(x => x.Issue.DiasRestantes)
+                        .Take(10)
+                        .ToList();
+                }
+
+                @if (!allUrgent.Any())
+                {
+                    <div class="alert-dark-success">✅ Nenhuma tarefa urgente em todos os projetos!</div>
+                }
+                else
+                {
+                    @foreach (var item in allUrgent)
+                    {
+                        var riskClass = item.Issue.DiasRestantes switch { <= 1 => "high", <= 3 => "medium", _ => "low" };
+                        var riskLabel = item.Issue.DiasRestantes switch { <= 1 => "High", <= 3 => "Medium", _ => "Low" };
+                        var riskIcon = item.Issue.DiasRestantes switch { <= 1 => "🔺", <= 3 => "🔶", _ => "🔹" };
+
+                        <a href="@Url.Action("Issue", "Dashboard", new { key = item.Issue.Key, project = item.Project })" class="risk-item" style="text-decoration:none; cursor:pointer;">
+                            <div style="display:flex; align-items:flex-start; flex:1;">
+                                <span class="risk-icon @riskClass">@riskIcon</span>
+                                <div class="risk-info">
+                                    <div class="risk-title">@item.Issue.Summary</div>
+                                    <div class="risk-meta">
+                                        <span>@item.Issue.Key</span>
+                                        <span style="color:var(--accent-purple);">@item.Project</span>
+                                        <span>👤 @item.Issue.Assignee</span>
+                                        @if (item.Issue.DueDate.HasValue)
+                                        {
+                                            <span>📅 @item.Issue.DueDate.Value.ToString("dd/MM")</span>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                            <span class="risk-level risk-@riskClass">@riskLabel</span>
+                        </a>
+                    }
+                }
+            </div>
+        </div>
+
+        <!-- Team Capacity (summary) -->
+        <div class="panel" style="margin-top:16px;">
+            <div class="panel-header">
+                <h3>Project Capacity</h3>
+            </div>
+            <div class="panel-body">
+                @foreach (var proj in Model.ProjectSummaries)
+                {
+                    var capColor = proj.ProgressPercent >= 80 ? "var(--accent-green)" :
+                                   proj.ProgressPercent >= 50 ? "var(--accent-blue)" :
+                                   proj.ProgressPercent >= 25 ? "var(--accent-yellow)" : "var(--accent-red)";
+                    <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+                        <span style="font-size:0.78rem; color:var(--text-secondary); min-width:80px;">@proj.Key</span>
+                        <div class="progress-bar-track" style="flex:1;">
+                            <div style="height:100%; width:@(proj.ProgressPercent)%; background:@capColor; border-radius:3px;"></div>
+                        </div>
+                        <span style="font-size:0.72rem; color:var(--text-muted); min-width:40px; text-align:right;">@(proj.ProgressPercent)%</span>
+                    </div>
+                }
             </div>
         </div>
     </div>
 </div>
-
-@section Scripts {
-    <script>
-        function refreshEpics() {
-            var el = document.getElementById('epics-container');
-            el.innerHTML = '<div style="display:flex;justify-content:center;padding:30px;"><div class="spinner-dark"></div></div>';
-            $.get('@Url.Action("RefreshEpics", "Dashboard", new { project = Model.ProjetoSelecionado })', function(data) {
-                el.innerHTML = data;
-            });
-        }
-
-        function refreshUrgentes() {
-            var el = document.getElementById('urgentes-container');
-            el.innerHTML = '<div style="display:flex;justify-content:center;padding:30px;"><div class="spinner-dark"></div></div>';
-            $.get('@Url.Action("RefreshUrgentes", "Dashboard", new { project = Model.ProjetoSelecionado })', function(data) {
-                el.innerHTML = data;
-            });
-        }
-
-        setInterval(function() {
-            refreshEpics();
-            refreshUrgentes();
-        }, 300000);
-    </script>
-}

@@ -1,15 +1,18 @@
 @model Projeto5_Valcan.Models.DashboardViewModel
 @{
-    ViewData["Title"] = "Mission Control";
+    ViewData["Title"] = $"Dashboard — {Model.ProjetoNome}";
 }
 
 <!-- Header -->
 <div class="dashboard-header">
     <div>
-        <h1>Mission Control</h1>
-        <div class="subtitle">Last synced: agora · Sprint 24</div>
+        <h1>Mission Control — @Model.ProjetoNome</h1>
+        <div class="subtitle">
+            Projeto: <strong>@Model.ProjetoSelecionado</strong> · Last synced: agora
+        </div>
     </div>
     <div class="header-actions">
+        <a href="@Url.Action("Index", "Dashboard")" class="btn-sync">← Projetos</a>
         @if (Model.UsandoDadosMock)
         {
             <span class="risk-level risk-medium">DEMO</span>
@@ -96,7 +99,7 @@
         function refreshEpics() {
             var el = document.getElementById('epics-container');
             el.innerHTML = '<div style="display:flex;justify-content:center;padding:30px;"><div class="spinner-dark"></div></div>';
-            $.get('@Url.Action("RefreshEpics", "Dashboard")', function(data) {
+            $.get('@Url.Action("RefreshEpics", "Dashboard", new { project = Model.ProjetoSelecionado })', function(data) {
                 el.innerHTML = data;
             });
         }
@@ -104,7 +107,7 @@
         function refreshUrgentes() {
             var el = document.getElementById('urgentes-container');
             el.innerHTML = '<div style="display:flex;justify-content:center;padding:30px;"><div class="spinner-dark"></div></div>';
-            $.get('@Url.Action("RefreshUrgentes", "Dashboard")', function(data) {
+            $.get('@Url.Action("RefreshUrgentes", "Dashboard", new { project = Model.ProjetoSelecionado })', function(data) {
                 el.innerHTML = data;
             });
         }

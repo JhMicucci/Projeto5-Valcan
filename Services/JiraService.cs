@@ -8,8 +8,9 @@ namespace Projeto5_Valcan.Services
 {
     public interface IJiraService
     {
-        Task<List<JiraIssue>> BuscarEpicsAsync();
-        Task<List<JiraIssue>> BuscarTarefasUrgentesAsync();
+        Task<List<JiraProject>> BuscarProjetosAsync();
+        Task<List<JiraIssue>> BuscarEpicsAsync(string projectKey);
+        Task<List<JiraIssue>> BuscarTarefasUrgentesAsync(string projectKey);
     }
 
     public class JiraService : IJiraService
@@ -32,15 +33,55 @@ namespace Projeto5_Valcan.Services
             _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         }
 
-        public async Task<List<JiraIssue>> BuscarEpicsAsync()
+        public async Task<List<JiraProject>> BuscarProjetosAsync()
         {
-            var jql = "project = CT3 ORDER BY updated DESC";
+            try
+            {
+                var url = $"{_settings.BaseUrl}/rest/api/3/project";
+                _logger.LogInformation("Buscando projetos: {Url}", url);
+                var response = await _httpClient.GetAsync(url);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorBody = await response.Content.ReadAsStringAsync();
+                    _logger.LogError("Jira retornou {StatusCode}: {Body}", response.StatusCode, errorBody);
+                    response.EnsureSuccessStatusCode();
+                }
+
+                var json = await response.Content.ReadAsStringAsync();
+                using var doc = JsonDocument.Parse(json);
+                var projects = new List<JiraProject>();
+
+                foreach (var project in doc.RootElement.EnumerateArray())
+                {
+                    projects.Add(new JiraProject
+                    {
+                        Key = project.GetProperty("key").GetString() ?? "",
+                        Name = project.GetProperty("name").GetString() ?? "",
+                        ProjectTypeKey = project.TryGetProperty("projectTypeKey", out var ptk) ? ptk.GetString() ?? "" : "",
+                        AvatarUrl = project.TryGetProperty("avatarUrls", out var avatars) && avatars.TryGetProperty("48x48", out var av)
+                            ? av.GetString() ?? "" : ""
+                    });
+                }
+
+                return projects;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erro ao buscar projetos do Jira");
+                throw;
+            }
+        }
+
+        public async Task<List<JiraIssue>> BuscarEpicsAsync(string projectKey)
+        {
+            var jql = $"project = {projectKey} ORDER BY updated DESC";
             return await ExecutarBuscaAsync(jql);
         }
 
-        public async Task<List<JiraIssue>> BuscarTarefasUrgentesAsync()
+        public async Task<List<JiraIssue>> BuscarTarefasUrgentesAsync(string projectKey)
         {
-            var jql = "project = CT3 AND statusCategory != Done AND duedate is not EMPTY ORDER BY duedate ASC";
+            var jql = $"project = {projectKey} AND statusCategory != Done AND duedate is not EMPTY ORDER BY duedate ASC";
             return await ExecutarBuscaAsync(jql);
         }
 

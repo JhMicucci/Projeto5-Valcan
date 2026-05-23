@@ -17,7 +17,7 @@ namespace Projeto5_Valcan.Controllers
             _configuration = configuration;
         }
 
-        public async Task<IActionResult> Index()
+        public async Task<IActionResult> Index(string? project)
         {
             var viewModel = new DashboardViewModel();
             var usandoMock = string.IsNullOrEmpty(_configuration["Jira:ApiToken"]);
@@ -25,8 +25,20 @@ namespace Projeto5_Valcan.Controllers
 
             try
             {
-                var epicsTask = _jiraService.BuscarEpicsAsync();
-                var urgentesTask = _jiraService.BuscarTarefasUrgentesAsync();
+                // Buscar lista de projetos
+                viewModel.Projetos = await _jiraService.BuscarProjetosAsync();
+
+                // Se nenhum projeto selecionado, mostrar tela de seleção
+                if (string.IsNullOrEmpty(project))
+                {
+                    return View("SelectProject", viewModel);
+                }
+
+                viewModel.ProjetoSelecionado = project;
+                viewModel.ProjetoNome = viewModel.Projetos.FirstOrDefault(p => p.Key == project)?.Name ?? project;
+
+                var epicsTask = _jiraService.BuscarEpicsAsync(project);
+                var urgentesTask = _jiraService.BuscarTarefasUrgentesAsync(project);
 
                 await Task.WhenAll(epicsTask, urgentesTask);
 
@@ -43,32 +55,32 @@ namespace Projeto5_Valcan.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> RefreshEpics()
+        public async Task<IActionResult> RefreshEpics(string project)
         {
             try
             {
-                var epics = await _jiraService.BuscarEpicsAsync();
+                var epics = await _jiraService.BuscarEpicsAsync(project);
                 return PartialView("_EpicsTable", epics);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Erro ao atualizar epics");
-                return Content($"<div class='alert alert-danger'>Erro: {ex.Message}</div>");
+                return Content($"<div class='alert-dark-danger'>Erro: {ex.Message}</div>");
             }
         }
 
         [HttpGet]
-        public async Task<IActionResult> RefreshUrgentes()
+        public async Task<IActionResult> RefreshUrgentes(string project)
         {
             try
             {
-                var urgentes = await _jiraService.BuscarTarefasUrgentesAsync();
+                var urgentes = await _jiraService.BuscarTarefasUrgentesAsync(project);
                 return PartialView("_TarefasUrgentes", urgentes);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Erro ao atualizar tarefas urgentes");
-                return Content($"<div class='alert alert-danger'>Erro: {ex.Message}</div>");
+                return Content($"<div class='alert-dark-danger'>Erro: {ex.Message}</div>");
             }
         }
     }

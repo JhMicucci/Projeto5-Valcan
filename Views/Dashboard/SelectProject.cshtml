@@ -1,0 +1,54 @@
+@model Projeto5_Valcan.Models.DashboardViewModel
+@{
+    ViewData["Title"] = "Select Project";
+}
+
+<!-- Header -->
+<div class="dashboard-header">
+    <div>
+        <h1>Projects</h1>
+        <div class="subtitle">Selecione um projeto para visualizar o dashboard</div>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(Model.ErrorMessage))
+{
+    <div class="alert-dark-danger mb-3">
+        <strong>Erro:</strong> @Model.ErrorMessage
+    </div>
+}
+
+@if (Model.UsandoDadosMock)
+{
+    <div class="alert-dark-info" style="margin-bottom: 20px;">
+        <strong>Modo Demonstração:</strong> Exibindo projetos de exemplo.
+    </div>
+}
+
+<div class="metric-cards" style="grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));">
+    @foreach (var project in Model.Projetos)
+    {
+        <a href="@Url.Action("Index", "Dashboard", new { project = project.Key })" style="text-decoration: none;">
+            <div class="metric-card" style="cursor:pointer; padding: 24px; flex-direction: column; align-items: flex-start; gap: 12px;">
+                <div style="display:flex; align-items:center; gap: 12px; width:100%;">
+                    <div class="metric-icon blue" style="width:42px; height:42px; font-size:1.1rem;">📁</div>
+                    <div>
+                        <div class="metric-value" style="font-size: 1.1rem;">@project.Name</div>
+                        <div class="metric-label" style="margin-top:4px;">@project.Key</div>
+                    </div>
+                </div>
+                <div style="display:flex; gap:10px; width:100%; margin-top:6px;">
+                    <span class="status-badge status-progress">Software</span>
+                    <span style="color: var(--text-muted); font-size:0.72rem;">Clique para abrir →</span>
+                </div>
+            </div>
+        </a>
+    }
+</div>
+
+@if (!Model.Projetos.Any())
+{
+    <div class="alert-dark-info">
+        Nenhum projeto encontrado. Verifique suas credenciais em <code>appsettings.json</code>.
+    </div>
+}

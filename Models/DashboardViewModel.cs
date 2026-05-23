@@ -2,6 +2,9 @@ namespace Projeto5_Valcan.Models
 {
     public class DashboardViewModel
     {
+        public List<JiraProject> Projetos { get; set; } = new();
+        public string? ProjetoSelecionado { get; set; }
+        public string? ProjetoNome { get; set; }
         public List<JiraIssue> Epics { get; set; } = new();
         public List<JiraIssue> TarefasUrgentes { get; set; } = new();
         public int TotalEpics => Epics.Count;

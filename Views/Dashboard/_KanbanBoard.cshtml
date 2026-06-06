@@ -1,0 +1,79 @@
+@model List<Projeto5_Valcan.Models.JiraIssue>
+
+@{
+    var proj = ViewContext.HttpContext.Request.Query["project"].ToString();
+
+    var todoItems = Model.Where(i => i.Status.ToLower() is "to do" or "a fazer" or "backlog" or "open").ToList();
+    var progressItems = Model.Where(i => i.Status.ToLower() is "in progress" or "em progresso" or "in review" or "em revisão").ToList();
+    var doneItems = Model.Where(i => i.Status.ToLower() is "done" or "concluído" or "closed").ToList();
+
+    var otherItems = Model.Except(todoItems).Except(progressItems).Except(doneItems).ToList();
+    todoItems.AddRange(otherItems);
+}
+
+<div class="kanban-board" id="kanban-board">
+    <!-- TO DO -->
+    <div class="kanban-column" data-status="todo">
+        <div class="kanban-column-header">
+            <span class="kanban-column-title">
+                <span class="dot todo"></span> To Do
+            </span>
+            <span class="kanban-column-count">@todoItems.Count</span>
+        </div>
+        <div class="kanban-column-body" data-status="todo"
+             ondragover="kanbanDragOver(event)" ondragleave="kanbanDragLeave(event)" ondrop="kanbanDrop(event)">
+            @foreach (var item in todoItems)
+            {
+                @await Html.PartialAsync("_KanbanCard", item)
+            }
+            @if (!todoItems.Any())
+            {
+                <div class="kanban-empty">Nenhuma tarefa</div>
+            }
+        </div>
+    </div>
+
+    <!-- IN PROGRESS -->
+    <div class="kanban-column" data-status="progress">
+        <div class="kanban-column-header">
+            <span class="kanban-column-title">
+                <span class="dot progress"></span> In Progress
+            </span>
+            <span class="kanban-column-count">@progressItems.Count</span>
+        </div>
+        <div class="kanban-column-body" data-status="progress"
+             ondragover="kanbanDragOver(event)" ondragleave="kanbanDragLeave(event)" ondrop="kanbanDrop(event)">
+            @foreach (var item in progressItems)
+            {
+                @await Html.PartialAsync("_KanbanCard", item)
+            }
+            @if (!progressItems.Any())
+            {
+                <div class="kanban-empty">Nenhuma tarefa</div>
+            }
+        </div>
+    </div>
+
+    <!-- DONE -->
+    <div class="kanban-column" data-status="done">
+        <div class="kanban-column-header">
+            <span class="kanban-column-title">
+                <span class="dot done"></span> Done
+            </span>
+            <span class="kanban-column-count">@doneItems.Count</span>
+        </div>
+        <div class="kanban-column-body" data-status="done"
+             ondragover="kanbanDragOver(event)" ondragleave="kanbanDragLeave(event)" ondrop="kanbanDrop(event)">
+            @foreach (var item in doneItems)
+            {
+                @await Html.PartialAsync("_KanbanCard", item)
+            }
+            @if (!doneItems.Any())
+            {
+                <div class="kanban-empty">Nenhuma tarefa</div>
+            }
+        </div>
+    </div>
+</div>
+
+<script>if (window.initHoverPreviews) window.initHoverPreviews();</script>

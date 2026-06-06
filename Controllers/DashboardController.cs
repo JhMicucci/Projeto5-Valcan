@@ -133,6 +133,21 @@ namespace Projeto5_Valcan.Controllers
         }
 
         [HttpGet]
+        public async Task<IActionResult> RefreshKanban(string project)
+        {
+            try
+            {
+                var epics = await _jiraService.BuscarEpicsAsync(project);
+                return PartialView("_KanbanBoard", epics);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erro ao atualizar kanban");
+                return Content($"<div class='alert-dark-danger'>Erro: {ex.Message}</div>");
+            }
+        }
+
+        [HttpGet]
         public async Task<IActionResult> RefreshUrgentes(string project)
         {
             try
@@ -196,6 +211,36 @@ namespace Projeto5_Valcan.Controllers
                 TempData["Error"] = $"Erro ao alterar status: {ex.Message}";
             }
             return RedirectToAction("Issue", new { key = issueKey, project });
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> MoveCard(string issueKey, string transitionId)
+        {
+            try
+            {
+                await _jiraService.AtualizarStatusAsync(issueKey, transitionId);
+                return Json(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erro ao mover card {Key}", issueKey);
+                return Json(new { success = false, error = ex.Message });
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetTransitions(string issueKey)
+        {
+            try
+            {
+                var transitions = await _jiraService.BuscarTransicoesAsync(issueKey);
+                return Json(transitions.Select(t => new { t.Id, t.Name }));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erro ao buscar transições de {Key}", issueKey);
+                return Json(new List<object>());
+            }
         }
     }
 }

@@ -1,0 +1,46 @@
+@model Projeto5_Valcan.Models.JiraIssue
+
+@{
+    var proj = ViewContext.HttpContext.Request.Query["project"].ToString();
+    var initials = string.Concat(Model.Assignee.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(w => w[0])).ToUpper();
+    var dueCss = Model.IsOverdue ? "overdue" : Model.DiasRestantes <= 3 ? "soon" : "ok";
+}
+
+<div class="hover-wrapper">
+    <div class="kanban-card" draggable="true"
+         data-key="@Model.Key"
+         data-project="@proj"
+         ondragstart="kanbanDragStart(event)"
+         ondragend="kanbanDragEnd(event)">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span class="card-key">@Model.Key</span>
+            <span style="font-size:0.6rem; color:var(--text-muted);">@Model.IssueType</span>
+        </div>
+        <div class="card-title">
+            <a href="@Url.Action("Issue", "Dashboard", new { key = Model.Key, project = proj })"
+               style="color:inherit; text-decoration:none;"
+               onclick="event.stopPropagation();">
+                @Model.Summary
+            </a>
+        </div>
+        @if (!string.IsNullOrEmpty(Model.ParentKey))
+        {
+            <div class="card-epic">⚡ @Model.ParentKey</div>
+        }
+        <div class="card-footer">
+            <div class="card-assignee">
+                <div class="card-avatar">@initials</div>
+                <span>@Model.Assignee</span>
+            </div>
+            @if (Model.DueDate.HasValue)
+            {
+                <span class="card-due @dueCss">📅 @Model.DueDate.Value.ToString("dd/MM")</span>
+            }
+        </div>
+    </div>
+    <div class="hover-popover" data-preview-key="@Model.Key" data-loaded="false">
+        <div class="preview-card" style="display:flex;justify-content:center;padding:20px;">
+            <div class="spinner-dark"></div>
+        </div>
+    </div>
+</div>

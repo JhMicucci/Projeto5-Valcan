@@ -64,21 +64,30 @@
 
 <!-- Two-column layout -->
 <div class="row g-3">
-    <!-- Delivery Status -->
+    <!-- Delivery Status / Kanban -->
     <div class="col-lg-7">
         <div class="panel">
             <div class="panel-header">
                 <h3>Delivery Status</h3>
-                <button class="btn-sync" onclick="refreshEpics()">🔄</button>
+                <div style="display:flex; gap:8px; align-items:center;">
+                    <div class="view-toggle">
+                        <button class="view-toggle-btn active" id="btn-list-view" onclick="switchView('list')">📋 Lista</button>
+                        <button class="view-toggle-btn" id="btn-kanban-view" onclick="switchView('kanban')">📊 Kanban</button>
+                    </div>
+                    <button class="btn-sync" onclick="refreshEpics()">🔄</button>
+                </div>
             </div>
-            <div class="panel-body" id="epics-container">
+            <div class="panel-body" id="epics-container" data-view="list">
                 @await Html.PartialAsync("_EpicsTable", Model.Epics)
+            </div>
+            <div class="panel-body" id="kanban-container" data-view="kanban" style="display:none;">
+                @await Html.PartialAsync("_KanbanBoard", Model.Epics)
             </div>
         </div>
     </div>
 
     <!-- Risk Indicators -->
-    <div class="col-lg-5">
+    <div class="col-lg-5" id="risk-panel-col">
         <div class="panel">
             <div class="panel-header">
                 <h3>Risk Indicators</h3>
@@ -185,11 +194,250 @@
 
 @section Scripts {
     <script>
+        /* === View Toggle === */
+        function switchView(mode) {
+            var listEl = document.getElementById('epics-container');
+            var kanbanEl = document.getElementById('kanban-container');
+            var btnList = document.getElementById('btn-list-view');
+            var btnKanban = document.getElementById('btn-kanban-view');
+            var deliveryCol = listEl.closest('.col-lg-7');
+            var riskCol = document.getElementById('risk-panel-col');
+
+            if (mode === 'kanban') {
+                listEl.style.display = 'none';
+                kanbanEl.style.display = 'block';
+                btnList.classList.remove('active');
+                btnKanban.classList.add('active');
+                if (deliveryCol) { deliveryCol.className = 'col-lg-12'; }
+                if (riskCol) { riskCol.style.display = 'none'; }
+            } else {
+                listEl.style.display = 'block';
+                kanbanEl.style.display = 'none';
+                btnKanban.classList.remove('active');
+                btnList.classList.add('active');
+                if (deliveryCol) { deliveryCol.className = 'col-lg-7'; }
+                if (riskCol) { riskCol.style.display = ''; }
+            }
+
+            if (window.initHoverPreviews) window.initHoverPreviews();
+        }
+
+        /* === Drag & Drop === */
+        var draggedCard = null;
+
+        function kanbanDragStart(e) {
+            draggedCard = e.target.closest('.kanban-card');
+            draggedCard.classList.add('dragging');
+            e.dataTransfer.setData('text/plain', draggedCard.dataset.key);
+            e.dataTransfer.effectAllowed = 'move';
+            // Hide any open popovers and disable hover during drag
+            document.querySelectorAll('.hover-popover.visible').forEach(function(p) { p.classList.remove('visible'); });
+            document.getElementById('kanban-board').classList.add('dragging-active');
+        }
+
+        function kanbanDragEnd(e) {
+            if (draggedCard) draggedCard.classList.remove('dragging');
+            draggedCard = null;
+            document.querySelectorAll('.kanban-column-body').forEach(function(col) {
+                col.classList.remove('drag-over');
+            });
+            var board = document.getElementById('kanban-board');
+            if (board) board.classList.remove('dragging-active');
+        }
+
+        function kanbanDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            e.currentTarget.classList.add('drag-over');
+        }
+
+        function kanbanDragLeave(e) {
+            e.currentTarget.classList.remove('drag-over');
+        }
+
+        function kanbanDrop(e) {
+            e.preventDefault();
+            e.currentTarget.classList.remove('drag-over');
+
+            var issueKey = e.dataTransfer.getData('text/plain');
+            var targetStatus = e.currentTarget.dataset.status;
+            var targetColEl = e.currentTarget; // capture before async
+            var card = document.querySelector('.kanban-card[data-key="' + issueKey + '"]');
+
+            if (!card) return;
+
+            var currentCol = card.closest('.kanban-column-body');
+            if (currentCol && currentCol.dataset.status === targetStatus) return;
+
+            // Fetch available transitions
+            fetch('/Dashboard/GetTransitions?issueKey=' + encodeURIComponent(issueKey))
+                .then(function(r) { return r.json(); })
+                .then(function(transitions) {
+                    var targetNames = getTargetNames(targetStatus);
+                    var match = null;
+
+                    for (var i = 0; i < transitions.length; i++) {
+                        var tName = transitions[i].name.toLowerCase();
+                        for (var j = 0; j < targetNames.length; j++) {
+                            if (tName.indexOf(targetNames[j]) >= 0) {
+                                match = transitions[i];
+                                break;
+                            }
+                        }
+                        if (match) break;
+                    }
+
+                    if (!match && transitions.length > 0) {
+                        showTransitionPicker(issueKey, transitions, targetColEl);
+                        return;
+                    }
+
+                    if (!match) {
+                        showToast('Transição não disponível para ' + issueKey, true);
+                        return;
+                    }
+
+                    moveCard(issueKey, match.id, card, targetColEl);
+                });
+        }
+
+        function getTargetNames(status) {
+            switch (status) {
+                case 'todo': return ['to do', 'a fazer', 'backlog', 'open', 'aberto'];
+                case 'progress': return ['in progress', 'em progresso', 'em andamento', 'start'];
+                case 'done': return ['done', 'concluído', 'closed', 'finalizado', 'complete'];
+                default: return [];
+            }
+        }
+
+        function moveCard(issueKey, transitionId, cardEl, targetCol) {
+            cardEl.style.opacity = '0.4';
+            cardEl.style.pointerEvents = 'none';
+
+            var formData = new FormData();
+            formData.append('issueKey', issueKey);
+            formData.append('transitionId', transitionId);
+
+            fetch('/Dashboard/MoveCard', {
+                method: 'POST',
+                body: formData
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(result) {
+                if (result.success) {
+                    var wrapper = cardEl.closest('.hover-wrapper');
+                    var sourceCol = wrapper.parentElement;
+
+                    // Remove empty placeholder from target
+                    var emptyMsg = targetCol.querySelector('.kanban-empty');
+                    if (emptyMsg) emptyMsg.remove();
+
+                    // Move the card wrapper to the target column
+                    targetCol.appendChild(wrapper);
+                    cardEl.style.opacity = '1';
+                    cardEl.style.pointerEvents = '';
+
+                    // Add empty placeholder to source if now empty
+                    if (sourceCol && sourceCol.querySelectorAll('.kanban-card').length === 0) {
+                        var div = document.createElement('div');
+                        div.className = 'kanban-empty';
+                        div.textContent = 'Nenhuma tarefa';
+                        sourceCol.appendChild(div);
+                    }
+
+                    updateColumnCounts();
+                    showToast('✅ ' + issueKey + ' movido com sucesso!');
+                    if (window.initHoverPreviews) window.initHoverPreviews();
+                } else {
+                    cardEl.style.opacity = '1';
+                    cardEl.style.pointerEvents = '';
+                    showToast('Erro: ' + (result.error || 'Falha ao mover'), true);
+                }
+            })
+            .catch(function() {
+                cardEl.style.opacity = '1';
+                cardEl.style.pointerEvents = '';
+                showToast('Erro de rede ao mover ' + issueKey, true);
+            });
+        }
+
+        function updateColumnCounts() {
+            document.querySelectorAll('.kanban-column').forEach(function(col) {
+                var body = col.querySelector('.kanban-column-body');
+                var count = body.querySelectorAll('.kanban-card').length;
+                var badge = col.querySelector('.kanban-column-count');
+                if (badge) badge.textContent = count;
+
+                var empty = body.querySelector('.kanban-empty');
+                if (count === 0 && !empty) {
+                    var div = document.createElement('div');
+                    div.className = 'kanban-empty';
+                    div.textContent = 'Nenhuma tarefa';
+                    body.appendChild(div);
+                }
+            });
+        }
+
+        function showTransitionPicker(issueKey, transitions, targetCol) {
+            var existing = document.getElementById('transition-picker');
+            if (existing) existing.remove();
+
+            var picker = document.createElement('div');
+            picker.id = 'transition-picker';
+            picker.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--bg-card);border:1px solid var(--accent-blue);border-radius:10px;padding:16px;z-index:10001;box-shadow:0 8px 30px rgba(0,0,0,0.5);min-width:220px;';
+            picker.innerHTML = '<div style="font-size:0.8rem;color:var(--text-primary);margin-bottom:10px;font-weight:600;">Escolha a transição para ' + issueKey + ':</div>';
+
+            transitions.forEach(function(t) {
+                var btn = document.createElement('button');
+                btn.textContent = t.name;
+                btn.style.cssText = 'display:block;width:100%;margin:4px 0;padding:8px 12px;background:rgba(255,255,255,0.05);border:1px solid var(--border-color);border-radius:6px;color:var(--text-primary);cursor:pointer;font-size:0.75rem;text-align:left;';
+                btn.onmouseover = function() { btn.style.borderColor = 'var(--accent-blue)'; };
+                btn.onmouseout = function() { btn.style.borderColor = 'var(--border-color)'; };
+                btn.onclick = function() {
+                    picker.remove();
+                    var card = document.querySelector('.kanban-card[data-key="' + issueKey + '"]');
+                    if (card) moveCard(issueKey, t.id, card, targetCol);
+                };
+                picker.appendChild(btn);
+            });
+
+            var cancel = document.createElement('button');
+            cancel.textContent = 'Cancelar';
+            cancel.style.cssText = 'display:block;width:100%;margin-top:8px;padding:6px;background:transparent;border:1px solid var(--border-color);border-radius:6px;color:var(--text-muted);cursor:pointer;font-size:0.7rem;';
+            cancel.onclick = function() { picker.remove(); };
+            picker.appendChild(cancel);
+
+            document.body.appendChild(picker);
+        }
+
+        function showToast(msg, isError) {
+            var existing = document.querySelector('.kanban-toast');
+            if (existing) existing.remove();
+
+            var toast = document.createElement('div');
+            toast.className = 'kanban-toast' + (isError ? ' error' : '');
+            toast.textContent = msg;
+            document.body.appendChild(toast);
+            setTimeout(function() { toast.remove(); }, 3000);
+        }
+
+        /* === Refresh === */
         function refreshEpics() {
-            var el = document.getElementById('epics-container');
-            el.innerHTML = '<div style="display:flex;justify-content:center;padding:30px;"><div class="spinner-dark"></div></div>';
-            $.get('@Url.Action("RefreshEpics", "Dashboard", new { project = Model.ProjetoSelecionado })', function(data) {
-                el.innerHTML = data;
+            var isList = document.getElementById('epics-container').style.display !== 'none';
+
+            if (isList) {
+                var el = document.getElementById('epics-container');
+                el.innerHTML = '<div style="display:flex;justify-content:center;padding:30px;"><div class="spinner-dark"></div></div>';
+                $.get('@Url.Action("RefreshEpics", "Dashboard", new { project = Model.ProjetoSelecionado })', function(data) {
+                    el.innerHTML = data;
+                    if (window.initHoverPreviews) window.initHoverPreviews();
+                });
+            }
+
+            var kanbanEl = document.getElementById('kanban-container');
+            kanbanEl.innerHTML = '<div style="display:flex;justify-content:center;padding:30px;"><div class="spinner-dark"></div></div>';
+            $.get('@Url.Action("RefreshKanban", "Dashboard", new { project = Model.ProjetoSelecionado })', function(data) {
+                kanbanEl.innerHTML = data;
                 if (window.initHoverPreviews) window.initHoverPreviews();
             });
         }

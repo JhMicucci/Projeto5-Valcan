@@ -10,42 +10,41 @@ else
 {
     @foreach (var tarefa in Model)
     {
-        var riskClass = tarefa.DiasRestantes switch
-        {
-            <= 1 => "high",
-            <= 3 => "medium",
-            _ => "low"
-        };
-        var riskLabel = tarefa.DiasRestantes switch
-        {
-            <= 1 => "High",
-            <= 3 => "Medium",
-            _ => "Low"
-        };
-        var riskIcon = tarefa.DiasRestantes switch
-        {
-            <= 1 => "🔺",
-            <= 3 => "🔶",
-            _ => "🔹"
-        };
+        var riskClass = tarefa.DiasRestantes switch { <= 1 => "high", <= 3 => "medium", _ => "low" };
+        var riskLabel = tarefa.DiasRestantes switch { <= 1 => "High", <= 3 => "Medium", _ => "Low" };
+        var riskIcon = tarefa.DiasRestantes switch { <= 1 => "🔺", <= 3 => "🔶", _ => "🔹" };
+        var proj = ViewContext.HttpContext.Request.Query["project"].ToString();
 
-        <a href="@Url.Action("Issue", "Dashboard", new { key = tarefa.Key, project = ViewContext.HttpContext.Request.Query["project"].ToString() })" class="risk-item" style="text-decoration:none; cursor:pointer;">
-            <div style="display:flex; align-items:flex-start; flex:1;">
-                <span class="risk-icon @riskClass">@riskIcon</span>
-                <div class="risk-info">
-                    <div class="risk-title">@tarefa.Summary</div>
-                    <div class="risk-meta">
-                        <span>@tarefa.Key</span>
-                        <span>👤 @tarefa.Assignee</span>
-                        @if (tarefa.DueDate.HasValue)
-                        {
-                            <span>📅 @tarefa.DueDate.Value.ToString("dd/MM")</span>
-                        }
-                        <span>⏳ @tarefa.DiasRestantes dia(s)</span>
+        <div class="hover-wrapper">
+            <a href="@Url.Action("Issue", "Dashboard", new { key = tarefa.Key, project = proj })" class="risk-item" style="text-decoration:none; cursor:pointer;">
+                <div style="display:flex; align-items:flex-start; flex:1;">
+                    <span class="risk-icon @riskClass">@riskIcon</span>
+                    <div class="risk-info">
+                        <div class="risk-title">@tarefa.Summary</div>
+                        <div class="risk-meta">
+                            <span>@tarefa.Key</span>
+                            @if (!string.IsNullOrEmpty(tarefa.ParentKey))
+                            {
+                                <span style="color:var(--accent-purple);">⚡ @tarefa.ParentKey</span>
+                            }
+                            <span>👤 @tarefa.Assignee</span>
+                            @if (tarefa.DueDate.HasValue)
+                            {
+                                <span>📅 @tarefa.DueDate.Value.ToString("dd/MM")</span>
+                            }
+                            <span>⏳ @tarefa.DiasRestantes dia(s)</span>
+                        </div>
                     </div>
                 </div>
+                <span class="risk-level risk-@riskClass">@riskLabel</span>
+            </a>
+            <div class="hover-popover" data-preview-key="@tarefa.Key" data-loaded="false">
+                <div class="preview-card" style="display:flex;justify-content:center;padding:20px;">
+                    <div class="spinner-dark"></div>
+                </div>
             </div>
-            <span class="risk-level risk-@riskClass">@riskLabel</span>
-        </a>
+        </div>
     }
+
+    <script>if (window.initHoverPreviews) window.initHoverPreviews();</script>
 }

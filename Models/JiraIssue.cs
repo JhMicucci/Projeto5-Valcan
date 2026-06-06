@@ -8,12 +8,16 @@ namespace Projeto5_Valcan.Models
         public string Assignee { get; set; } = "Não atribuído";
         public string Priority { get; set; } = string.Empty;
         public string IssueType { get; set; } = string.Empty;
+        public string? ParentKey { get; set; }
+        public string? ParentSummary { get; set; }
         public DateTime? DueDate { get; set; }
         public DateTime? Updated { get; set; }
 
         public int DiasRestantes => DueDate.HasValue 
             ? (DueDate.Value.Date - DateTime.Today).Days 
             : int.MaxValue;
+
+        public bool IsOverdue => DueDate.HasValue && DueDate.Value.Date < DateTime.Today;
 
         public string BadgeUrgencia => DiasRestantes switch
         {

@@ -94,6 +94,95 @@
     </div>
 </div>
 
+<!-- Team & Deadlines -->
+<div class="row g-3" style="margin-top:4px;">
+    <!-- Team Members -->
+    <div class="col-lg-5">
+        <div class="panel">
+            <div class="panel-header">
+                <h3>👤 Team Members</h3>
+            </div>
+            <div class="panel-body">
+                @{
+                    var colorClasses = new[] { "c1", "c2", "c3", "c4", "c5", "c6" };
+                    var byAssignee = Model.Epics
+                        .GroupBy(i => i.Assignee)
+                        .OrderByDescending(g => g.Count())
+                        .ToList();
+                }
+
+                @foreach (var (group, idx) in byAssignee.Select((g, i) => (g, i)))
+                {
+                    var initials = string.Concat(group.Key.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(w => w[0]));
+                    var done = group.Count(i => i.Status.ToLower() is "done" or "concluído" or "closed");
+                    var progress = group.Count(i => i.Status.ToLower() is "in progress" or "em progresso");
+
+                    <div class="manager-row">
+                        <div class="manager-avatar @colorClasses[idx % colorClasses.Length]">@initials.ToUpper()</div>
+                        <div class="manager-info">
+                            <div class="manager-name">@group.Key</div>
+                            <div class="manager-count">
+                                @group.Count() issues · ✅ @done done · 🔄 @progress active
+                            </div>
+                        </div>
+                    </div>
+                }
+
+                @if (!byAssignee.Any())
+                {
+                    <div class="alert-dark-info">Nenhum responsável encontrado.</div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Deadlines & Epics -->
+    <div class="col-lg-7">
+        <div class="panel">
+            <div class="panel-header">
+                <h3>📅 Deadlines & Epics</h3>
+            </div>
+            <div class="panel-body">
+                @{
+                    var withDeadlines = Model.Epics
+                        .Where(i => i.DueDate.HasValue)
+                        .OrderBy(i => i.DueDate)
+                        .ToList();
+                }
+
+                @if (!withDeadlines.Any())
+                {
+                    <div class="alert-dark-info">Nenhum prazo definido neste projeto.</div>
+                }
+                else
+                {
+                    @foreach (var issue in withDeadlines)
+                    {
+                        var dateCss = issue.IsOverdue ? "overdue" : issue.DiasRestantes <= 3 ? "soon" : "ok";
+
+                        <a href="@Url.Action("Issue", "Dashboard", new { key = issue.Key, project = Model.ProjetoSelecionado })" class="deadline-item" style="text-decoration:none;">
+                            <span class="deadline-date @dateCss">
+                                @issue.DueDate!.Value.ToString("dd/MM")
+                            </span>
+                            <div class="deadline-info">
+                                <span>
+                                    <span class="deadline-key">@issue.Key</span>
+                                    <span class="deadline-summary">@issue.Summary</span>
+                                </span>
+                                @if (!string.IsNullOrEmpty(issue.ParentKey))
+                                {
+                                    <span class="deadline-epic">⚡ @issue.ParentKey @issue.ParentSummary</span>
+                                }
+                            </div>
+                            <span style="font-size:0.7rem; color:var(--text-muted);">👤 @issue.Assignee</span>
+                        </a>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
 @section Scripts {
     <script>
         function refreshEpics() {
@@ -101,6 +190,7 @@
             el.innerHTML = '<div style="display:flex;justify-content:center;padding:30px;"><div class="spinner-dark"></div></div>';
             $.get('@Url.Action("RefreshEpics", "Dashboard", new { project = Model.ProjetoSelecionado })', function(data) {
                 el.innerHTML = data;
+                if (window.initHoverPreviews) window.initHoverPreviews();
             });
         }
 
@@ -109,6 +199,7 @@
             el.innerHTML = '<div style="display:flex;justify-content:center;padding:30px;"><div class="spinner-dark"></div></div>';
             $.get('@Url.Action("RefreshUrgentes", "Dashboard", new { project = Model.ProjetoSelecionado })', function(data) {
                 el.innerHTML = data;
+                if (window.initHoverPreviews) window.initHoverPreviews();
             });
         }
 

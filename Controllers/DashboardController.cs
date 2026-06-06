@@ -101,6 +101,23 @@ namespace Projeto5_Valcan.Controllers
         }
 
         [HttpGet]
+        public async Task<IActionResult> Preview(string key)
+        {
+            try
+            {
+                var detail = await _jiraService.BuscarDetalhesIssueAsync(key);
+                if (detail == null)
+                    return Content("<div class='alert-dark-info'>Issue não encontrada.</div>");
+                return PartialView("_IssuePreview", detail);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erro ao buscar preview da issue {Key}", key);
+                return Content($"<div style='padding:10px;color:var(--text-muted);font-size:0.8rem;'>Erro ao carregar preview</div>");
+            }
+        }
+
+        [HttpGet]
         public async Task<IActionResult> RefreshEpics(string project)
         {
             try

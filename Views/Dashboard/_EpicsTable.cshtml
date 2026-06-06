@@ -13,26 +13,55 @@ else
         var percent = GetProgressPercent(epic.Status);
         var barColor = GetBarColor(percent);
         var percentClass = percent >= 80 ? "high" : percent >= 40 ? "mid" : "low";
+        var proj = ViewContext.HttpContext.Request.Query["project"].ToString();
 
-        <a href="@Url.Action("Issue", "Dashboard", new { key = epic.Key, project = ViewContext.HttpContext.Request.Query["project"].ToString() })" class="delivery-item" style="text-decoration:none; display:block; cursor:pointer;">
-            <div class="delivery-header">
-                <div class="delivery-name">
-                    <span class="delivery-key">@epic.Key</span>
-                    <span class="delivery-title">@epic.Summary</span>
+        <div class="hover-wrapper">
+            <a href="@Url.Action("Issue", "Dashboard", new { key = epic.Key, project = proj })" class="delivery-item" style="text-decoration:none; display:block; cursor:pointer;">
+                <div class="delivery-header">
+                    <div class="delivery-name">
+                        <span class="delivery-key">@epic.Key</span>
+                        <span class="delivery-title">@epic.Summary</span>
+                    </div>
+                    <div class="delivery-sprint" style="display:flex; gap:6px; align-items:center;">
+                        @if (!string.IsNullOrEmpty(epic.ParentKey))
+                        {
+                            <span style="font-size:0.65rem; color:var(--accent-purple);">⚡ @epic.ParentKey</span>
+                        }
+                        <span class="status-badge @GetStatusClass(epic.Status)">@epic.Status</span>
+                    </div>
                 </div>
-                <div class="delivery-sprint">
-                    <span class="status-badge @GetStatusClass(epic.Status)">@epic.Status</span>
+                <div class="progress-bar-track">
+                    <div class="progress-bar-fill @barColor" style="width: @(percent)%"></div>
+                </div>
+                <div class="delivery-meta">
+                    <span>
+                        👤 @epic.Assignee
+                        &nbsp;·&nbsp; 🏷️ @epic.IssueType
+                        @if (epic.DueDate.HasValue)
+                        {
+                            <text>&nbsp;·&nbsp;</text>
+                            @if (epic.IsOverdue)
+                            {
+                                <span style="color:var(--accent-red);">⚠ @epic.DueDate.Value.ToString("dd/MM")</span>
+                            }
+                            else
+                            {
+                                <span>📅 @epic.DueDate.Value.ToString("dd/MM")</span>
+                            }
+                        }
+                    </span>
+                    <span class="delivery-percent @percentClass">@(percent)%</span>
+                </div>
+            </a>
+            <div class="hover-popover" data-preview-key="@epic.Key" data-loaded="false">
+                <div class="preview-card" style="display:flex;justify-content:center;padding:20px;">
+                    <div class="spinner-dark"></div>
                 </div>
             </div>
-            <div class="progress-bar-track">
-                <div class="progress-bar-fill @barColor" style="width: @(percent)%"></div>
-            </div>
-            <div class="delivery-meta">
-                <span>👤 @epic.Assignee &nbsp; · &nbsp; 🏷️ @epic.IssueType</span>
-                <span class="delivery-percent @percentClass">@(percent)%</span>
-            </div>
-        </a>
+        </div>
     }
+
+    <script>if (window.initHoverPreviews) window.initHoverPreviews();</script>
 }
 
 @functions {

@@ -1,0 +1,96 @@
+@model Projeto5_Valcan.Models.JiraIssueDetail
+
+<div class="preview-card">
+    <div class="preview-header">
+        <span class="delivery-key" style="font-size:0.72rem;">@Model.Key</span>
+        <span class="status-badge @GetStatusCss(Model.Status)" style="font-size:0.6rem;">@Model.Status</span>
+    </div>
+    <div class="preview-title">@Model.Summary</div>
+
+    @if (!string.IsNullOrEmpty(Model.ParentKey))
+    {
+        <div class="preview-row">
+            <span class="preview-label">Epic</span>
+            <span style="color:var(--accent-purple); font-size:0.72rem;">⚡ @Model.ParentKey @Model.ParentSummary</span>
+        </div>
+    }
+
+    <div class="preview-row">
+        <span class="preview-label">Assignee</span>
+        <span>👤 @Model.Assignee</span>
+    </div>
+
+    <div class="preview-row">
+        <span class="preview-label">Priority</span>
+        <span class="priority-badge @GetPriorityCss(Model.Priority)">@Model.Priority</span>
+    </div>
+
+    @if (Model.DueDate.HasValue)
+    {
+        <div class="preview-row">
+            <span class="preview-label">Due date</span>
+            <span class="@(Model.IsDueDateOverdue ? "details-value overdue" : "")" style="font-size:0.75rem;">
+                @(Model.IsDueDateOverdue ? "⚠ " : "📅 ")@Model.DueDate.Value.ToString("dd/MM/yyyy")
+                @if (Model.DiasRestantes.HasValue)
+                {
+                    <text> (@(Model.DiasRestantes.Value)d)</text>
+                }
+            </span>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(Model.Sprint))
+    {
+        <div class="preview-row">
+            <span class="preview-label">Sprint</span>
+            <span style="color:var(--accent-blue); font-size:0.72rem;">@Model.Sprint</span>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(Model.Reporter))
+    {
+        <div class="preview-row">
+            <span class="preview-label">Reporter</span>
+            <span>@Model.Reporter</span>
+        </div>
+    }
+
+    <div class="preview-row">
+        <span class="preview-label">Type</span>
+        <span>@Model.IssueType</span>
+    </div>
+
+    @if (Model.Subtasks.Any())
+    {
+        <div class="preview-row" style="flex-direction:column; align-items:flex-start; gap:4px;">
+            <span class="preview-label">Subtasks (@Model.Subtasks.Count(s => s.IsDone)/@Model.Subtasks.Count)</span>
+            <div class="progress-bar-track" style="width:100%; margin-top:2px;">
+                @{ var subPercent = Model.Subtasks.Any() ? (int)((double)Model.Subtasks.Count(s => s.IsDone) / Model.Subtasks.Count * 100) : 0; }
+                <div class="progress-bar-fill @(subPercent >= 80 ? "green" : subPercent >= 40 ? "blue" : "yellow")" style="width:@(subPercent)%"></div>
+            </div>
+        </div>
+    }
+
+    <div class="preview-footer">
+        <span>Click to open details →</span>
+    </div>
+</div>
+
+@functions {
+    string GetStatusCss(string s) => s.ToLower() switch
+    {
+        "in progress" or "em progresso" => "status-progress",
+        "to do" or "a fazer" => "status-todo",
+        "done" or "concluído" => "status-done",
+        _ => "status-todo"
+    };
+
+    string GetPriorityCss(string p) => p.ToLower() switch
+    {
+        "critical" or "highest" or "crítica" => "priority-critical",
+        "high" or "alta" => "priority-high",
+        "medium" or "média" => "priority-medium",
+        "low" or "baixa" => "priority-low",
+        _ => ""
+    };
+}

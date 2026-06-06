@@ -99,7 +99,7 @@ namespace Projeto5_Valcan.Services
         {
             try
             {
-                var url = $"{_settings.BaseUrl}/rest/api/3/search/jql?jql={Uri.EscapeDataString(jql)}&maxResults=50&fields=summary,status,assignee,priority,updated,duedate,issuetype";
+                var url = $"{_settings.BaseUrl}/rest/api/3/search/jql?jql={Uri.EscapeDataString(jql)}&maxResults=50&fields=summary,status,assignee,priority,updated,duedate,issuetype,parent";
 
                 _logger.LogInformation("Buscando Jira: {Url}", url);
                 var response = await _httpClient.GetAsync(url);
@@ -141,7 +141,12 @@ namespace Projeto5_Valcan.Services
                         DueDate = fields.TryGetProperty("duedate", out var duedate) && duedate.ValueKind != JsonValueKind.Null 
                             ? DateTime.TryParse(duedate.GetString(), out var dd) ? dd : null : null,
                         Updated = fields.TryGetProperty("updated", out var updated) && updated.ValueKind != JsonValueKind.Null 
-                            ? DateTime.TryParse(updated.GetString(), out var ud) ? ud : null : null
+                            ? DateTime.TryParse(updated.GetString(), out var ud) ? ud : null : null,
+                        ParentKey = fields.TryGetProperty("parent", out var parent) && parent.ValueKind != JsonValueKind.Null
+                            && parent.TryGetProperty("key", out var parentKey) ? parentKey.GetString() : null,
+                        ParentSummary = fields.TryGetProperty("parent", out var parentF) && parentF.ValueKind != JsonValueKind.Null
+                            && parentF.TryGetProperty("fields", out var pFields) && pFields.TryGetProperty("summary", out var pSummary)
+                            ? pSummary.GetString() : null
                     });
                 }
 

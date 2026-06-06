@@ -177,3 +177,101 @@
         </div>
     </div>
 </div>
+
+<!-- Team & Deadlines Row -->
+<div class="row g-3" style="margin-top:4px;">
+    <!-- Team Overview -->
+    <div class="col-lg-5">
+        <div class="panel">
+            <div class="panel-header">
+                <h3>👤 Team Overview</h3>
+            </div>
+            <div class="panel-body">
+                @{
+                    var allIssues = Model.ProjectSummaries.SelectMany(p => p.Issues).ToList();
+                    var colorClasses = new[] { "c1", "c2", "c3", "c4", "c5", "c6" };
+                    var byAssignee = allIssues
+                        .GroupBy(i => i.Assignee)
+                        .OrderByDescending(g => g.Count())
+                        .Take(8)
+                        .ToList();
+                }
+
+                @foreach (var (group, idx) in byAssignee.Select((g, i) => (g, i)))
+                {
+                    var initials = string.Concat(group.Key.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(w => w[0]));
+                    var done = group.Count(i => i.Status.ToLower() is "done" or "concluído" or "closed");
+                    var progress = group.Count(i => i.Status.ToLower() is "in progress" or "em progresso");
+                    var total = group.Count();
+
+                    <div class="manager-row">
+                        <div class="manager-avatar @colorClasses[idx % colorClasses.Length]">@initials.ToUpper()</div>
+                        <div class="manager-info">
+                            <div class="manager-name">@group.Key</div>
+                            <div class="manager-count">
+                                @total issues · ✅ @done done · 🔄 @progress active
+                            </div>
+                        </div>
+                        <div style="min-width:36px; text-align:right;">
+                            <span style="font-size:0.75rem; font-weight:600; color:var(--text-primary);">@total</span>
+                        </div>
+                    </div>
+                }
+
+                @if (!byAssignee.Any())
+                {
+                    <div class="alert-dark-info">Nenhum responsável encontrado.</div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Deadlines & Epics -->
+    <div class="col-lg-7">
+        <div class="panel">
+            <div class="panel-header">
+                <h3>📅 Deadlines & Epics</h3>
+            </div>
+            <div class="panel-body">
+                @{
+                    var withDeadlines = Model.ProjectSummaries
+                        .SelectMany(p => p.Issues.Where(i => i.DueDate.HasValue)
+                            .Select(i => new { Project = p.Key, Issue = i }))
+                        .OrderBy(x => x.Issue.DueDate)
+                        .Take(12)
+                        .ToList();
+                }
+
+                @if (!withDeadlines.Any())
+                {
+                    <div class="alert-dark-info">Nenhum prazo definido nos projetos.</div>
+                }
+                else
+                {
+                    @foreach (var item in withDeadlines)
+                    {
+                        var dateCss = item.Issue.IsOverdue ? "overdue" : item.Issue.DiasRestantes <= 3 ? "soon" : "ok";
+
+                        <a href="@Url.Action("Issue", "Dashboard", new { key = item.Issue.Key, project = item.Project })" class="deadline-item" style="text-decoration:none;">
+                            <span class="deadline-date @dateCss">
+                                @item.Issue.DueDate!.Value.ToString("dd/MM")
+                            </span>
+                            <div class="deadline-info">
+                                <span>
+                                    <span class="deadline-key">@item.Issue.Key</span>
+                                    <span class="deadline-summary">@item.Issue.Summary</span>
+                                </span>
+                                @if (!string.IsNullOrEmpty(item.Issue.ParentKey))
+                                {
+                                    <span class="deadline-epic">⚡ @item.Issue.ParentKey @item.Issue.ParentSummary</span>
+                                }
+                            </div>
+                            <span style="font-size:0.7rem; color:var(--text-muted);">@item.Project</span>
+                            <span style="font-size:0.7rem; color:var(--text-muted);">👤 @item.Issue.Assignee</span>
+                        </a>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+</div>
